@@ -665,6 +665,9 @@ function IncomeEditor({ganhos, setGanhos, title}: {ganhos: ValorResumo[]; setGan
   const update = (index: number, patch: Partial<ValorResumo>) => {
     setGanhos(ganhos.map((item, idx) => idx === index ? {...item, ...patch, last_update: nowIso()} : item));
   };
+  const updateMoney = (index: number, value: string) => {
+    update(index, {valor: parseMoney(formatMoneyInput(value))});
+  };
   return (
     <section className="income-editor">
       <div className="section-heading">
@@ -674,7 +677,7 @@ function IncomeEditor({ganhos, setGanhos, title}: {ganhos: ValorResumo[]; setGan
       {ganhos.map((item, index) => (
         <div className="income-row" key={item.id}>
           <input required value={item.descricao} onChange={e => update(index, {descricao: e.target.value})} placeholder="Descricao" />
-          <input required inputMode="numeric" value={item.valor ? money(item.valor) : ''} onChange={e => update(index, {valor: parseMoney(formatMoneyInput(e.target.value))})} placeholder="R$ 0,00" />
+          <input required inputMode="numeric" value={item.valor ? money(item.valor) : ''} onChange={e => updateMoney(index, e.target.value)} placeholder="R$ 0,00" />
           <input required type="number" min={1} max={31} value={item.dia_entrada || 1} onChange={e => update(index, {dia_entrada: Number(e.target.value)})} />
           <button type="button" className="icon-button danger" onClick={() => setGanhos(ganhos.filter((_, idx) => idx !== index))}><Trash2 size={16} /></button>
         </div>
