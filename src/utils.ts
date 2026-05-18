@@ -36,6 +36,12 @@ export const dayLabel = (date: string) => format(parseDate(date), "dd 'de' MMMM"
 export const money = (value: number) =>
   new Intl.NumberFormat('pt-BR', {style: 'currency', currency: 'BRL'}).format(value || 0);
 
+export const formatMoneyInput = (value: string | number) => {
+  const digits = String(value).replace(/\D/g, '');
+  if (!digits) return '';
+  return money(Number(digits) / 100);
+};
+
 export const parseMoney = (value: string | number) => {
   if (typeof value === 'number') return value;
   const normalized = value.replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.');

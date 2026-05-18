@@ -26,6 +26,7 @@ import type {CategoriaDespesa, DashboardData, Despesa, ValorResumo} from './type
 import {authService, categoryService, dashboardService, expenseService, monthService, userService} from './services';
 import {
   dayLabel,
+  formatMoneyInput,
   money,
   monthLabel,
   normalizeGanhos,
@@ -539,7 +540,7 @@ function ExpenseForm({dashboard, editing, onCancel, onSaved}: {
   const [form, setForm] = useState({
     vencimento: editing ? toInputDate(editing.vencimento) : `${dashboard.mes_info.id}-01`,
     descricao: editing?.descricao || '',
-    valor: editing ? String(editing.valor).replace('.', ',') : '',
+    valor: editing ? money(editing.valor) : '',
     informacao: editing?.informacao || '',
     parcela: editing?.parcela || 1,
     totalParcelas: editing?.totalParcelas || 1,
@@ -582,7 +583,7 @@ function ExpenseForm({dashboard, editing, onCancel, onSaved}: {
       <FormHeader title={editing ? 'Editar despesa' : 'Nova despesa'} onBack={onCancel} />
       <div className="form-grid">
         <label>Vencimento<input required type="date" value={form.vencimento} onChange={e => setForm({...form, vencimento: e.target.value})} /></label>
-        <label>Valor<input required inputMode="decimal" value={form.valor} onChange={e => setForm({...form, valor: e.target.value})} placeholder="R$ 0,00" /></label>
+        <label>Valor<input required inputMode="numeric" value={form.valor} onChange={e => setForm({...form, valor: formatMoneyInput(e.target.value)})} placeholder="R$ 0,00" /></label>
         <label className="wide">Descricao<input required value={form.descricao} onChange={e => setForm({...form, descricao: e.target.value})} placeholder="Nome da despesa" /></label>
         <label className="wide">Observacoes<input value={form.informacao} onChange={e => setForm({...form, informacao: e.target.value})} placeholder="Opcional" /></label>
         <label>Parcela atual<input min={1} type="number" value={form.parcela} onChange={e => setForm({...form, parcela: Number(e.target.value)})} /></label>
@@ -673,7 +674,7 @@ function IncomeEditor({ganhos, setGanhos, title}: {ganhos: ValorResumo[]; setGan
       {ganhos.map((item, index) => (
         <div className="income-row" key={item.id}>
           <input required value={item.descricao} onChange={e => update(index, {descricao: e.target.value})} placeholder="Descricao" />
-          <input required inputMode="decimal" value={String(item.valor).replace('.', ',')} onChange={e => update(index, {valor: parseMoney(e.target.value)})} placeholder="Valor" />
+          <input required inputMode="numeric" value={item.valor ? money(item.valor) : ''} onChange={e => update(index, {valor: parseMoney(formatMoneyInput(e.target.value))})} placeholder="R$ 0,00" />
           <input required type="number" min={1} max={31} value={item.dia_entrada || 1} onChange={e => update(index, {dia_entrada: Number(e.target.value)})} />
           <button type="button" className="icon-button danger" onClick={() => setGanhos(ganhos.filter((_, idx) => idx !== index))}><Trash2 size={16} /></button>
         </div>
