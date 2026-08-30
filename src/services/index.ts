@@ -1,6 +1,19 @@
 import {addMonths} from 'date-fns';
-import {supabase} from './supabase';
-import type {CategoriaDespesa, DashboardData, Despesa, Mes, UserData, ValorResumo} from './types';
+import {supabase} from '../lib/supabase';
+import type {
+  CategoriaDespesa,
+  DashboardData,
+  Despesa,
+  Mes,
+  Meta,
+  MetaMovimento,
+  Pessoa,
+  Reserva,
+  ReservaMovimento,
+  TipoMovimento,
+  UserData,
+  ValorResumo,
+} from '../types';
 import {
   DEFAULT_CATEGORIES,
   addMonthsIso,
@@ -13,7 +26,7 @@ import {
   toIsoFromInputDate,
   toMesId,
   uuid,
-} from './utils';
+} from '../lib/format';
 
 const PAGE_SIZE = 1000;
 
@@ -23,7 +36,7 @@ const requireUser = async () => {
     error,
   } = await supabase.auth.getSession();
   if (error) throw error;
-  if (!session?.user) throw new Error('Sessao expirada. Entre novamente.');
+  if (!session?.user) throw new Error('Sessão expirada. Entre novamente.');
   return session.user;
 };
 
@@ -306,7 +319,7 @@ export const expenseService = {
     const now = nowIso();
     const rows = expenses.map(expense => {
       const mesUniqueId = expense.mesUniqueid || expense.mesUniqueId || uniqueByMesId.get(expense.mesId);
-      if (!mesUniqueId) throw new Error(`Mes ${expense.mesId} sem identificador remoto.`);
+      if (!mesUniqueId) throw new Error(`Mês ${expense.mesId} sem identificador remoto.`);
       const {mesUniqueid, ...rest} = expense;
       return {
         ...rest,
@@ -318,6 +331,7 @@ export const expenseService = {
         informacao: expense.informacao || '',
         groupId: expense.groupId || null,
         despesa_fixa_id: expense.despesa_fixa_id || null,
+        pessoa_id: expense.pessoa_id || null,
       };
     });
     const {error} = await supabase.from('despesa').upsert(rows, {
@@ -356,6 +370,7 @@ export const expenseService = {
     totalParcelas: number;
     paid: boolean;
     fixa: boolean;
+    pessoaId?: string | null;
     editing?: Despesa | null;
   }) {
     const dueIso = toIsoFromInputDate(input.vencimento);
@@ -374,6 +389,7 @@ export const expenseService = {
       mesId: toMesId(dueIso),
       mesUniqueid: input.editing?.mesUniqueid || input.editing?.mesUniqueId || null,
       despesa_fixa_id: input.fixa ? input.editing?.despesa_fixa_id || uuid() : null,
+      pessoa_id: input.pessoaId || null,
     };
     await this.saveMany(input.editing ? [base] : this.buildInstallments(base));
   },
@@ -460,5 +476,243 @@ export const dashboardService = {
       categoria_despesas: categorias,
       despesas,
     };
+  },
+};
+
+const now = () => nowIso();
+
+const stampNew = (userId: string) => ({
+  user_id: userId,
+  add_date: now(),
+  last_update: now(),
+  last_sync: now(),
+});
+
+const stampUpdate = () => ({last_update: now(), last_sync: now()});
+
+/** Exclusão lógica, igual ao resto do aplicativo. Nada some do banco. */
+const softDelete = async (table: string, id: string) => {
+  const {error} = await supabase
+    .from(table)
+    .update({logical_delete_date: now(), ...stampUpdate()})
+    .eq('id', id);
+  if (error) throw error;
+};
+
+export const pessoaService = {
+  async list(): Promise<Pessoa[]> {
+    const user = await requireUser();
+    return fetchAll<Pessoa>('pessoa', (from, to) =>
+      supabase
+        .from('pessoa')
+        .select('*')
+        .eq('user_id', user.id)
+        .is('logical_delete_date', null)
+        .order('nome', {ascending: true})
+        .range(from, to),
+    );
+  },
+
+  async create(nome: string, informacao = ''): Promise<Pessoa> {
+    const user = await requireUser();
+    const row: Pessoa = {
+      id: uuid(),
+      nome: nome.trim(),
+      informacao,
+      extra_data: '',
+      ...stampNew(user.id),
+    };
+    const {error} = await supabase.from('pessoa').insert(row);
+    if (error) throw error;
+    return row;
+  },
+
+  async rename(id: string, nome: string) {
+    const {error} = await supabase
+      .from('pessoa')
+      .update({nome: nome.trim(), ...stampUpdate()})
+      .eq('id', id);
+    if (error) throw error;
+  },
+
+  /**
+   * Remover a pessoa não apaga o histórico: as despesas dela voltam a ser suas
+   * apenas se você desvincular à mão. Aqui só marcamos a pessoa como excluída.
+   */
+  async remove(id: string) {
+    await softDelete('pessoa', id);
+  },
+};
+
+export const metaService = {
+  async list(): Promise<Meta[]> {
+    const user = await requireUser();
+    const rows = await fetchAll<Meta>('meta', (from, to) =>
+      supabase
+        .from('meta')
+        .select('*')
+        .eq('user_id', user.id)
+        .is('logical_delete_date', null)
+        .order('add_date', {ascending: true})
+        .range(from, to),
+    );
+    return rows.map(row => ({
+      ...row,
+      valor_alvo: Number(row.valor_alvo) || 0,
+      aporte_mensal: Number(row.aporte_mensal) || 0,
+    }));
+  },
+
+  async listMovimentos(): Promise<MetaMovimento[]> {
+    const user = await requireUser();
+    const rows = await fetchAll<MetaMovimento>('meta_movimento', (from, to) =>
+      supabase
+        .from('meta_movimento')
+        .select('*')
+        .eq('user_id', user.id)
+        .is('logical_delete_date', null)
+        .order('data', {ascending: true})
+        .range(from, to),
+    );
+    return rows.map(row => ({...row, valor: Number(row.valor) || 0}));
+  },
+
+  async save(input: {
+    id?: string;
+    descricao: string;
+    valorAlvo: number;
+    aporteMensal: number;
+    dataAlvo?: string | null;
+    informacao?: string;
+  }): Promise<Meta> {
+    const user = await requireUser();
+    const row: Meta = {
+      id: input.id || uuid(),
+      descricao: input.descricao.trim(),
+      valor_alvo: input.valorAlvo,
+      aporte_mensal: input.aporteMensal,
+      data_alvo: input.dataAlvo || null,
+      concluida: false,
+      informacao: input.informacao || '',
+      extra_data: '',
+      ...stampNew(user.id),
+    };
+    const {error} = await supabase.from('meta').upsert(row, {onConflict: 'id', defaultToNull: false});
+    if (error) throw error;
+    return row;
+  },
+
+  async setConcluida(id: string, concluida: boolean) {
+    const {error} = await supabase.from('meta').update({concluida, ...stampUpdate()}).eq('id', id);
+    if (error) throw error;
+  },
+
+  async remove(id: string) {
+    await softDelete('meta', id);
+  },
+
+  async addMovimento(input: {
+    metaId: string;
+    mesId: string;
+    valor: number;
+    tipo: TipoMovimento;
+    data?: string;
+    informacao?: string;
+  }): Promise<MetaMovimento> {
+    const user = await requireUser();
+    const row: MetaMovimento = {
+      id: uuid(),
+      meta_id: input.metaId,
+      mes_id: input.mesId,
+      data: input.data || now(),
+      valor: Math.abs(input.valor),
+      tipo: input.tipo,
+      informacao: input.informacao || '',
+      ...stampNew(user.id),
+    };
+    const {error} = await supabase.from('meta_movimento').insert(row);
+    if (error) throw error;
+    return row;
+  },
+
+  async removeMovimento(id: string) {
+    await softDelete('meta_movimento', id);
+  },
+};
+
+export const reservaService = {
+  /** Uma linha por usuário. Se ainda não existir, criamos vazia. */
+  async ensure(): Promise<Reserva> {
+    const user = await requireUser();
+    const {data, error} = await supabase
+      .from('reserva')
+      .select('*')
+      .eq('user_id', user.id)
+      .is('logical_delete_date', null)
+      .maybeSingle();
+    if (error) throw error;
+    if (data) {
+      return {...data, objetivo: Number(data.objetivo) || 0, aporte_mensal: Number(data.aporte_mensal) || 0};
+    }
+
+    const row: Reserva = {
+      id: uuid(),
+      objetivo: 0,
+      aporte_mensal: 0,
+      informacao: '',
+      extra_data: '',
+      ...stampNew(user.id),
+    };
+    const {error: insertError} = await supabase.from('reserva').insert(row);
+    if (insertError) throw insertError;
+    return row;
+  },
+
+  async updateObjetivo(id: string, objetivo: number, aporteMensal: number) {
+    const {error} = await supabase
+      .from('reserva')
+      .update({objetivo, aporte_mensal: aporteMensal, ...stampUpdate()})
+      .eq('id', id);
+    if (error) throw error;
+  },
+
+  async listMovimentos(): Promise<ReservaMovimento[]> {
+    const user = await requireUser();
+    const rows = await fetchAll<ReservaMovimento>('reserva_movimento', (from, to) =>
+      supabase
+        .from('reserva_movimento')
+        .select('*')
+        .eq('user_id', user.id)
+        .is('logical_delete_date', null)
+        .order('data', {ascending: true})
+        .range(from, to),
+    );
+    return rows.map(row => ({...row, valor: Number(row.valor) || 0}));
+  },
+
+  async addMovimento(input: {
+    mesId: string;
+    valor: number;
+    tipo: TipoMovimento;
+    data?: string;
+    informacao?: string;
+  }): Promise<ReservaMovimento> {
+    const user = await requireUser();
+    const row: ReservaMovimento = {
+      id: uuid(),
+      mes_id: input.mesId,
+      data: input.data || now(),
+      valor: Math.abs(input.valor),
+      tipo: input.tipo,
+      informacao: input.informacao || '',
+      ...stampNew(user.id),
+    };
+    const {error} = await supabase.from('reserva_movimento').insert(row);
+    if (error) throw error;
+    return row;
+  },
+
+  async removeMovimento(id: string) {
+    await softDelete('reserva_movimento', id);
   },
 };
