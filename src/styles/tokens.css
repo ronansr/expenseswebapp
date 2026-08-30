@@ -1,0 +1,124 @@
+/* =============================================================
+   Design tokens - SobControle
+   Uma paleta por projeto, um acento de marca (verde), cores de
+   estado reservadas (vermelho/ambar/azul) e uma escala de raio
+   documentada: cartao 16px, controle 10px, pilula 999px.
+   ============================================================= */
+
+:root {
+  color-scheme: light;
+
+  /* Marca (acento único do produto) */
+  --brand-050: #e9f6ef;
+  --brand-100: #cdebda;
+  --brand-500: #0f8f52;
+  --brand-600: #0b7a45;
+  --brand-700: #066238;
+
+  /* Estado (reservadas, nunca usadas como "serie 4") */
+  --good-050: #e9f6ef;
+  --good-600: #0b7a45;
+  --warn-050: #fdf3e3;
+  --warn-600: #9a5b06;
+  --bad-050:  #fdeceb;
+  --bad-600:  #c8352f;
+  --info-050: #e9f1fc;
+  --info-600: #2a78d6;
+
+  /* Neutros (familia fria, uma só) */
+  --bg:          #f4f6f8;
+  --surface:     #ffffff;
+  --surface-2:   #f8fafb;
+  --surface-3:   #eef1f5;
+  --border:      #e3e7ec;
+  --border-strong:#cfd6de;
+  --text:        #131a22;
+  --text-muted:  #5b6672;
+  --text-faint:  #8c96a3;
+
+  /* Séries de gráfico (validadas: ver CLAUDE.md) */
+  --series-in:   #2a78d6;
+  --series-out:  #e34948;
+  --series-bal:  #008300;
+  --cat-1: #2a78d6;
+  --cat-2: #eb6834;
+  --cat-3: #1baf7a;
+  --cat-4: #eda100;
+  --cat-5: #e87ba4;
+  --cat-6: #4a3aa7;
+  --cat-7: #8c96a3;
+
+  /* Raio (escala travada) */
+  --r-card: 16px;
+  --r-control: 10px;
+  --r-pill: 999px;
+
+  /* Elevacao tingida no tom do fundo, nunca preto puro */
+  --shadow-1: 0 1px 2px rgba(19, 26, 34, .05);
+  --shadow-2: 0 1px 2px rgba(19, 26, 34, .05), 0 10px 28px -14px rgba(19, 26, 34, .28);
+  --shadow-3: 0 24px 60px -20px rgba(19, 26, 34, .35);
+  --ring: 0 0 0 3px rgba(15, 143, 82, .25);
+
+  /* Ritmo */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+
+  /* Movimento (Emil primario: nada acima de 300ms na UI) */
+  --dur-instant: 90ms;
+  --dur-fast: 140ms;
+  --dur-base: 190ms;
+  --dur-slow: 260ms;
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --ease-in:  cubic-bezier(.4, 0, 1, 1);
+  --ease-both: cubic-bezier(.4, 0, .2, 1);
+
+  --sidebar-w: 232px;
+  --topbar-h: 68px;
+  --tabbar-h: 64px;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-num: "SF Mono", ui-monospace, "Segoe UI Mono", Menlo, monospace;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --brand-050: #10281c;
+  --brand-100: #17402c;
+  --brand-500: #2fbf78;
+  --brand-600: #27a869;
+  --good-050: #10281c;
+  --good-600: #2fbf78;
+  --warn-050: #2e2413;
+  --warn-600: #e0a84a;
+  --bad-050:  #2e1817;
+  --bad-600:  #f0736c;
+  --info-050: #14202f;
+  --info-600: #6aa8f0;
+
+  --bg:        #0e1216;
+  --surface:   #161c22;
+  --surface-2: #1b222a;
+  --surface-3: #212a33;
+  --border:    #252d36;
+  --border-strong: #35404b;
+  --text:      #eef2f6;
+  --text-muted:#9aa6b2;
+  --text-faint:#6f7b87;
+
+  --series-in:  #3987e5;
+  --series-out: #e66767;
+  --series-bal: #3fc47f;
+  --cat-1: #3987e5;
+  --cat-2: #d95926;
+  --cat-3: #199e70;
+  --cat-4: #c98500;
+  --cat-5: #d55181;
+  --cat-6: #9085e9;
+  --cat-7: #7b8794;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow-2: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 28px -14px rgba(0, 0, 0, .7);
+  --shadow-3: 0 24px 60px -20px rgba(0, 0, 0, .8);
+  --ring: 0 0 0 3px rgba(47, 191, 120, .3);
+}
