@@ -34,6 +34,8 @@ export type CategoriaDespesa = {
   id: string;
   add_date?: string | null;
   descricao: string;
+  /** Teto mensal de gasto. Zero desliga o alerta da categoria. */
+  limite_mensal?: number | null;
   last_update?: string | null;
   last_sync?: string | null;
   informacao?: string | null;
@@ -157,4 +159,57 @@ export type ReservaMovimento = {
   last_update?: string | null;
   last_sync?: string | null;
   logical_delete_date?: string | null;
+};
+
+export type TipoInvestimento = 'poupanca' | 'cdi' | 'selic' | 'prefixado' | 'ipca';
+
+export type Investimento = {
+  id: string;
+  user_id?: string | null;
+  /** Quando preenchido, o saldo desta aplicação conta como lastro da meta. */
+  meta_id?: string | null;
+  descricao: string;
+  tipo: TipoInvestimento;
+  /** Percentual do indexador, para cdi e selic. 110 significa 110% do CDI. */
+  indice_percentual: number;
+  /** Taxa em % ao ano. Inteira no prefixado, só o spread no ipca. */
+  taxa_fixa: number;
+  liquidez_diaria?: boolean | null;
+  informacao?: string | null;
+  extra_data?: string | null;
+  add_date?: string | null;
+  last_update?: string | null;
+  last_sync?: string | null;
+  logical_delete_date?: string | null;
+};
+
+export type InvestimentoMovimento = {
+  id: string;
+  user_id?: string | null;
+  investimento_id: string;
+  mes_id: string;
+  data: string;
+  valor: number;
+  tipo: TipoMovimento;
+  informacao?: string | null;
+  add_date?: string | null;
+  last_update?: string | null;
+  last_sync?: string | null;
+  logical_delete_date?: string | null;
+};
+
+/** Taxas de mercado, em % ao ano, exceto onde o nome diz o contrário. */
+export type MarketRates = {
+  /** CDI anualizado base 252, série SGS 4389. */
+  cdi: number;
+  /** Meta Selic definida pelo Copom, série SGS 432. */
+  selic: number;
+  /** Rendimento mensal da poupança, série SGS 195. Já em % ao mês. */
+  poupancaMensal: number;
+  /** IPCA dos últimos doze meses, montado com a série SGS 433. */
+  ipca: number;
+  /** Quando as taxas foram buscadas. */
+  atualizadoEm: string;
+  /** Verdadeiro quando a API do Banco Central respondeu. */
+  aoVivo: boolean;
 };

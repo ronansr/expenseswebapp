@@ -23,6 +23,7 @@ import {CategoriesPage} from '../features/categories/CategoriesPage';
 import {ReportsPage} from '../features/reports/ReportsPage';
 import {PeoplePage} from '../features/people/PeoplePage';
 import {GoalsPage} from '../features/goals/GoalsPage';
+import {InvestmentsPage} from '../features/investments/InvestmentsPage';
 import {ReservePage} from '../features/reserve/ReservePage';
 import {ProfilePage} from '../features/profile/ProfilePage';
 import {VIEW_TITLES, type ViewId} from './navigation';
@@ -118,7 +119,12 @@ export const App = () => {
   const overview = monthOverview({
     expenses: state.expenses,
     ganhos: state.dashboard ? activeGains(state.dashboard.mes_info.ganhos_mes) : [],
-    aportesMes: aporteLiquidoMes(ledger.metaMovimentos, ledger.reservaMovimentos, state.mesId),
+    aportesMes: aporteLiquidoMes(
+      ledger.metaMovimentos,
+      ledger.reservaMovimentos,
+      state.mesId,
+      ledger.investimentoMovimentos,
+    ),
     reservaSaldo: reservaSaldo(ledger.reservaMovimentos),
   });
 
@@ -151,6 +157,7 @@ export const App = () => {
           theme={theme}
           initials={initials(profile?.name, profile?.email)}
           onShiftMonth={state.shiftMonth}
+          onSelectMonth={state.goToMonth}
           onToday={state.goToCurrentMonth}
           onRefresh={state.refresh}
           onToggleTheme={toggleTheme}
@@ -183,6 +190,7 @@ export const App = () => {
               {view === 'categories' && <CategoriesPage {...pageProps} />}
               {view === 'people' && <PeoplePage {...pageProps} />}
               {view === 'goals' && <GoalsPage {...pageProps} />}
+              {view === 'investments' && <InvestmentsPage {...pageProps} />}
               {view === 'reserve' && <ReservePage {...pageProps} />}
               {view === 'reports' && <ReportsPage {...pageProps} />}
               {view === 'profile' && <ProfilePage {...pageProps} onSignOut={signOut} />}

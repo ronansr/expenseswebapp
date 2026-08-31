@@ -20,6 +20,8 @@
 .card-head-actions { margin-left: auto; display: flex; align-items: center; gap: var(--sp-2); }
 .card-body { padding: var(--sp-4); }
 @media (min-width: 768px) { .card-body { padding: var(--sp-5); } }
+/* Lista colada no cabecalho do cartao, sem padding lateral proprio. */
+.card-list { margin-top: var(--sp-3); }
 .card-foot {
   padding: var(--sp-3) var(--sp-4);
   border-top: 1px solid var(--border);
@@ -54,6 +56,8 @@
 
 .btn-ghost { background: transparent; border-color: var(--border); }
 .btn-ghost:hover:not(:disabled) { background: var(--surface-3); }
+.btn-ghost.is-active,
+.btn-ghost[aria-pressed='true'] { background: var(--brand-050); border-color: var(--brand-500); color: var(--brand-600); }
 
 .btn-danger { background: var(--bad-600); color: #fff; }
 .btn-danger:hover:not(:disabled) { filter: brightness(1.06); }
@@ -89,6 +93,7 @@
 }
 .link-btn:hover { text-decoration: underline; }
 .link-btn.is-danger { color: var(--bad-600); }
+.link-btn > svg { vertical-align: -2px; margin-right: 4px; }
 
 /* ---------- Formularios (rotulo acima, erro abaixo, nunca placeholder-rotulo) ---------- */
 .field { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
@@ -119,8 +124,17 @@ textarea.input { height: auto; padding: var(--sp-3); resize: vertical; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); }
 @media (max-width: 560px) { .form-grid { grid-template-columns: minmax(0, 1fr); } }
 
-.form-actions { display: flex; gap: var(--sp-3); justify-content: flex-end; }
+/* Coluna estreita da bancada: um campo por linha, sempre. */
+.form-stack { display: flex; flex-direction: column; gap: var(--sp-4); }
+
+/* Sufixo de unidade colado ao campo, para porcentagem nao virar adivinhacao. */
+.input-suffix { display: flex; align-items: center; gap: var(--sp-2); }
+.input-suffix > span { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
+
+.form-actions { display: flex; gap: var(--sp-3); justify-content: flex-end; margin-top: var(--sp-4); }
 @media (max-width: 560px) { .form-actions { flex-direction: column-reverse; } .form-actions .btn { width: 100%; } }
+/* Na bancada o botao ocupa a coluna inteira: nao ha espaco para ele flutuar. */
+.form-actions-stack .btn { flex: 1; }
 
 /* Segmentado (a vista / parcelado / recorrente) */
 .segmented { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: var(--sp-2); }
@@ -293,6 +307,8 @@ textarea.input { height: auto; padding: var(--sp-3); resize: vertical; }
   font-size: 13px;
 }
 .banner-info { border-color: var(--info-600); background: var(--info-050); color: var(--info-600); }
+.banner-good { border-color: var(--good-600); background: var(--good-050); color: var(--good-600); }
+.banner-warn { border-color: var(--warn-600); background: var(--warn-050); color: var(--warn-600); }
 
 /* Entrada de conteúdo ao trocar de seção: uma vez, curta, só opacidade e 4px. */
 .enter { animation: enter var(--dur-base) var(--ease-out) both; }
@@ -301,9 +317,13 @@ textarea.input { height: auto; padding: var(--sp-3); resize: vertical; }
 .spin { animation: spin .9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* O segmentado dentro do cabecalho precisa de largura para as duas opcoes caberem. */
+.segmented-slot { min-width: 220px; }
+
 /* Em telas estreitas o cabeçalho do cartão quebra: título em cima, ações embaixo. */
 @media (max-width: 700px) {
   .card-head { flex-wrap: wrap; }
   .card-head-actions { margin-left: 0; width: 100%; }
   .card-head-actions > div { width: 100%; }
+  .segmented-slot { min-width: 0; width: 100%; }
 }

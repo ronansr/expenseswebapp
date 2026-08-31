@@ -238,18 +238,6 @@
 .summary-total.is-negative { background: var(--bad-050); color: var(--bad-600); }
 .summary-total b { font-size: 15px; font-variant-numeric: tabular-nums; }
 
-/* ---------- Editor de ganhos ---------- */
-.income-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 96px 36px;
-  gap: var(--sp-3);
-  align-items: end;
-}
-@media (max-width: 700px) {
-  .income-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .income-row > :first-child { grid-column: 1 / -1; }
-  .income-row > .icon-btn { justify-self: end; }
-}
 
 /* ---------- Opções de exclusão ---------- */
 .choice {
@@ -284,15 +272,6 @@
 .row-icon.tone-bad { background: var(--bad-050); color: var(--bad-600); }
 .row-icon.tone-good { background: var(--good-050); color: var(--good-600); }
 
-.income-block {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-3);
-  padding: var(--sp-4);
-  border: 1px solid var(--border);
-  border-radius: var(--r-control);
-  background: var(--surface-2);
-}
 
 /* Despesa de terceiro fica marcada na lateral: ela não é sua. */
 .expense.is-third-party { box-shadow: inset 3px 0 0 var(--info-600); }
@@ -309,3 +288,284 @@
 
 .row-item-button { width: 100%; border: 0; background: none; text-align: left; color: inherit; cursor: pointer; font: inherit; }
 .row-item-button:hover { background: var(--surface-2); }
+
+/* =============================================================================
+   Editor de receitas, separado por dono do dinheiro
+   O que era uma grade de quatro colunas com um botao solto no fim virou um
+   cartao por entrada. A grade desalinhava no celular porque o botao caia numa
+   linha propria e o rotulo de cada campo empurrava a altura da linha.
+   ============================================================================= */
+.income-groups { display: flex; flex-direction: column; gap: var(--sp-6); }
+.income-group { display: flex; flex-direction: column; gap: var(--sp-3); align-items: flex-start; }
+.income-group > .btn { align-self: flex-start; }
+
+.income-group-head {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+.income-group-text { min-width: 0; }
+.income-group-text h3 { font-size: 13.5px; }
+.income-group-text p { font-size: 12px; color: var(--text-muted); }
+.income-group-total { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.income-group-total span { font-size: 11.5px; color: var(--text-faint); white-space: nowrap; }
+.income-group-total strong { font-size: 15px; font-weight: 660; }
+.income-group-empty { font-size: 12.5px; color: var(--text-faint); padding: var(--sp-2) 0; }
+
+.income-card {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+}
+/* auto-fit em vez de calculo de porcentagem: a coluna some sozinha quando nao cabe. */
+.income-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-3) var(--sp-4); }
+.income-grid .field-wide { grid-column: 1 / -1; }
+.income-card-foot { display: flex; justify-content: flex-end; }
+.income-hint { display: flex; align-items: center; gap: var(--sp-2); font-size: 12.5px; }
+
+@media (max-width: 560px) {
+  .income-grid { grid-template-columns: minmax(0, 1fr); }
+  .income-group-head { grid-template-columns: 28px minmax(0, 1fr); row-gap: var(--sp-2); }
+  .income-group-total { grid-column: 2; align-items: flex-start; }
+  .income-card { padding: var(--sp-3); }
+  .income-card-foot { justify-content: flex-start; }
+}
+
+/* =============================================================================
+   Selecao de despesas
+   ============================================================================= */
+.expense.is-selectable { grid-template-columns: 22px 28px minmax(0, 1fr) auto auto; }
+.expense.is-selected { background: var(--brand-050); }
+.expense-select, .expense-day-select { display: flex; align-items: center; }
+.expense-select input, .expense-day-select input {
+  width: 16px; height: 16px;
+  accent-color: var(--brand-600);
+  cursor: pointer;
+}
+.expense-day-select { margin-right: var(--sp-1); }
+
+@media (max-width: 560px) {
+  .expense.is-selectable {
+    grid-template-columns: 22px 24px minmax(0, 1fr) auto;
+    grid-template-areas: 'pick check info amount' '. . actions actions';
+  }
+  .expense.is-selectable .expense-select { grid-area: pick; }
+}
+
+.selection-bar {
+  position: sticky;
+  bottom: calc(var(--sp-4) + env(safe-area-inset-bottom, 0px));
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  margin-top: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-card);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: saturate(180%) blur(12px);
+  box-shadow: var(--shadow-2);
+  /* Entra uma vez, de baixo. Marcar cada despesa depois disso nao anima nada. */
+  animation: selection-in var(--dur-slow) var(--ease-out);
+}
+@keyframes selection-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { .selection-bar { animation: none; } }
+
+.selection-figures { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.selection-count { font-size: 12px; color: var(--text-muted); }
+.selection-total { font-size: 19px; font-weight: 660; letter-spacing: -.02em; }
+.selection-split { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); font-size: 12px; color: var(--text-muted); }
+.selection-split span { display: inline-flex; align-items: center; }
+.selection-dot { width: 8px; height: 8px; border-radius: 3px; margin-right: 6px; }
+.selection-dot.is-paid { background: var(--brand-600); }
+.selection-dot.is-due { background: var(--warn-600); }
+.selection-actions { margin-left: auto; display: flex; gap: var(--sp-2); }
+
+@media (max-width: 560px) {
+  .selection-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sp-3);
+    bottom: calc(var(--tabbar-h) + var(--sp-2) + env(safe-area-inset-bottom, 0px));
+  }
+  .selection-actions { margin-left: 0; }
+  .selection-actions .btn { flex: 1; }
+}
+
+/* =============================================================================
+   Metas, investimentos, tetos e categorias: linhas altas com progresso
+   ============================================================================= */
+.goal-row, .invest-row, .limit-row, .category-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.goal-row + .goal-row,
+.invest-row + .invest-row,
+.limit-row + .limit-row,
+.category-row + .category-row { border-top: 1px solid var(--border); }
+.goal-row:hover, .invest-row:hover, .category-row:hover { background: var(--surface-2); }
+.goal-row.is-editing, .invest-row.is-editing { background: var(--brand-050); }
+
+.goal-main, .invest-main, .limit-main, .category-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.goal-title-line, .invest-title-line, .limit-title-line, .category-title-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+}
+.goal-title-line .row-title,
+.invest-title-line .row-title,
+.limit-title-line .row-title,
+.category-title-line .row-title { flex: 1; }
+.goal-percent { font-size: 14px; font-weight: 660; }
+.invest-bruto { font-size: 15px; font-weight: 660; }
+.limit-values { font-size: 12.5px; color: var(--text-muted); white-space: nowrap; }
+.goal-forecast { font-size: 12.5px; color: var(--text-muted); }
+
+.goal-actions, .invest-actions, .category-limit {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.category-limit { flex-wrap: wrap; justify-content: flex-end; max-width: 280px; }
+.category-limit .input { width: 132px; }
+
+.invest-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-4);
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.invest-figures b { margin-left: 4px; color: var(--text); font-weight: 620; }
+
+@media (max-width: 700px) {
+  .goal-row, .invest-row, .limit-row, .category-row {
+    grid-template-columns: 30px minmax(0, 1fr);
+    padding: var(--sp-3);
+  }
+  .goal-actions, .invest-actions, .category-limit {
+    grid-column: 2;
+    justify-content: flex-start;
+    max-width: none;
+    flex-wrap: wrap;
+  }
+  .category-limit .input { flex: 1; min-width: 120px; width: auto; }
+  .goal-title-line, .invest-title-line, .limit-title-line, .category-title-line { flex-wrap: wrap; }
+}
+
+/* =============================================================================
+   Taxas de mercado
+   ============================================================================= */
+.rate-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: var(--sp-3); }
+.rate-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+}
+.rate-label { font-size: 11px; font-weight: 620; color: var(--text-muted); letter-spacing: .04em; text-transform: uppercase; }
+.rate-value { font-size: 19px; font-weight: 660; letter-spacing: -.02em; }
+.rate-note { font-size: 11.5px; color: var(--text-faint); }
+
+/* =============================================================================
+   Teto de gasto por categoria
+   O traco cheio e o gasto de hoje. O tique vertical marca onde o mes fecha no
+   ritmo atual, que e a informacao capaz de mudar a decisao.
+   ============================================================================= */
+.limit-track {
+  position: relative;
+  display: block;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+}
+.limit-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--warn-600);
+  transform-origin: left;
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+.limit-fill.is-over { background: var(--bad-600); }
+.limit-marker {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 12px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text);
+}
+.limit-message { font-size: 12.5px; color: var(--text-muted); line-height: 1.45; }
+.alert-clear { display: flex; align-items: center; gap: var(--sp-3); font-size: 13px; color: var(--text-muted); }
+
+/* =============================================================================
+   Calendario em modo fluxo
+   ============================================================================= */
+.cal-grid.is-flow .cal-day { min-height: 78px; }
+.cal-balance {
+  margin-top: auto;
+  padding-top: 2px;
+  border-top: 1px solid var(--border);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.cal-balance.is-negative { color: var(--bad-600); }
+.cal-day.is-selected .cal-balance { color: #fff; border-top-color: rgba(255, 255, 255, .35); }
+@media (max-width: 560px) {
+  .cal-grid.is-flow .cal-day { min-height: 68px; }
+  .cal-balance { font-size: 9px; }
+}
+
+/* =============================================================================
+   Relatorio com projecao
+   O mes previsto e vazado, nao colorido diferente: a cor ja carrega entrada e
+   saida, e inventar uma terceira cor quebraria a paleta de estado.
+   ============================================================================= */
+.report-bar-label { display: flex; flex-direction: column; color: var(--text-muted); }
+.report-bar-label small { font-size: 9.5px; color: var(--text-faint); }
+.report-bar.is-forecast .report-bar-in,
+.report-bar.is-forecast .report-bar-out {
+  background: transparent;
+  border: 1.5px solid var(--series-in);
+}
+.report-bar.is-forecast .report-bar-out { border-color: var(--series-out); }
+.report-bar.is-current .report-bar-label { color: var(--text); font-weight: 620; }
+.viz-swatch-hatch {
+  width: 12px;
+  height: 10px;
+  border: 1.5px solid var(--text-faint);
+  border-radius: 2px;
+}
+
+/* A nota de total nunca disputa espaco com os controles da barra. */
+.toolbar-note { margin-left: auto; font-size: 13px; color: var(--text-muted); }
+@media (max-width: 700px) { .toolbar-note { margin-left: 0; width: 100%; } }

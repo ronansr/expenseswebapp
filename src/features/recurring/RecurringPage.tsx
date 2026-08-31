@@ -20,7 +20,7 @@ export const RecurringPage = ({dashboard, onNewExpense, onEditExpense, onDeleteE
           subtitle={`${groups.length} ativa(s), ${money(total)} por mês`}
           actions={<button type="button" className="btn btn-primary btn-sm" onClick={onNewExpense}>Nova recorrente</button>}
         />
-        <div style={{marginTop: 12}}>
+        <div className="card-list">
           {groups.length === 0 ? (
             <EmptyState
               icon={<Repeat size={22} />}

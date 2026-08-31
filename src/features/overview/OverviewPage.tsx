@@ -10,8 +10,11 @@ import {UpcomingPayments} from './UpcomingPayments';
 import {MonthSummary} from './MonthSummary';
 import {OwnVsOthers} from './OwnVsOthers';
 import {PlanningCard} from './PlanningCard';
+import {CategoryAlerts} from '../categories/CategoryAlerts';
 import {
+  activeCategoryAlerts,
   aportesPorDia,
+  categoryAlerts,
   categoryBreakdown,
   dailyFlow,
   metaProgress,
@@ -26,9 +29,18 @@ export const OverviewPage = ({dashboard, state, ledger, overview, onNavigate}: P
   const [scope, setScope] = useState<FlowScope>('proprio');
 
   const aportes = useMemo(
-    () => aportesPorDia(ledger.metaMovimentos, ledger.reservaMovimentos, state.mesId),
-    [ledger.metaMovimentos, ledger.reservaMovimentos, state.mesId],
+    () =>
+      aportesPorDia(
+        ledger.metaMovimentos,
+        ledger.reservaMovimentos,
+        state.mesId,
+        ledger.investimentoMovimentos,
+      ),
+    [ledger.metaMovimentos, ledger.reservaMovimentos, ledger.investimentoMovimentos, state.mesId],
   );
+
+  const alertas = useMemo(() => categoryAlerts(dashboard), [dashboard]);
+  const alertasAtivos = useMemo(() => activeCategoryAlerts(alertas), [alertas]);
   const flow = useMemo(() => dailyFlow(dashboard, {scope, aportes}), [dashboard, scope, aportes]);
 
   const despesasDoEscopo = scope === 'proprio' ? splitExpenses(state.expenses).proprias : state.expenses;
@@ -45,7 +57,7 @@ export const OverviewPage = ({dashboard, state, ledger, overview, onNavigate}: P
   const saldoReserva = useMemo(() => reservaSaldo(ledger.reservaMovimentos), [ledger.reservaMovimentos]);
 
   return (
-    <div className="enter" style={{display: 'flex', flexDirection: 'column', gap: 16}}>
+    <div className="enter page-stack">
       <div className="grid grid-kpi">
         <KpiCard
           label="Saldo disponível"
@@ -76,6 +88,14 @@ export const OverviewPage = ({dashboard, state, ledger, overview, onNavigate}: P
           tone="warn"
         />
       </div>
+
+      {alertasAtivos.length > 0 && (
+        <CategoryAlerts
+          alerts={alertasAtivos}
+          configurados={alertas.length}
+          onManage={() => onNavigate('categories')}
+        />
+      )}
 
       <div className="grid grid-main">
         <Card>

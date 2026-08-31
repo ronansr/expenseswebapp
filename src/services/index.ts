@@ -4,12 +4,15 @@ import type {
   CategoriaDespesa,
   DashboardData,
   Despesa,
+  Investimento,
+  InvestimentoMovimento,
   Mes,
   Meta,
   MetaMovimento,
   Pessoa,
   Reserva,
   ReservaMovimento,
+  TipoInvestimento,
   TipoMovimento,
   UserData,
   ValorResumo,
@@ -155,7 +158,21 @@ export const categoryService = {
         .eq('user_id', user.id)
         .order('descricao', {ascending: true})
         .range(from, to),
-    ).then(rows => rows.filter(row => !row.logical_delete_date));
+    ).then(rows =>
+      rows
+        .filter(row => !row.logical_delete_date)
+        .map(row => ({...row, limite_mensal: Number(row.limite_mensal) || 0})),
+    );
+  },
+
+  /** Teto mensal da categoria. Zero desliga o alerta, e e o valor padrao. */
+  async setLimite(id: string, limite: number) {
+    const now = nowIso();
+    const {error} = await supabase
+      .from('categoriadespesa')
+      .update({limite_mensal: Math.max(limite, 0), last_update: now, last_sync: now})
+      .eq('id', id);
+    if (error) throw error;
   },
 
   async ensureDefaults() {
@@ -577,6 +594,11 @@ export const metaService = {
     return rows.map(row => ({...row, valor: Number(row.valor) || 0}));
   },
 
+  /**
+   * Cria e edita pela mesma porta. Ao editar, `add_date` e `concluida` vem do
+   * registro atual: reescreve-los zeraria a ordem da lista e reabriria uma meta
+   * que ja tinha sido fechada.
+   */
   async save(input: {
     id?: string;
     descricao: string;
@@ -584,6 +606,7 @@ export const metaService = {
     aporteMensal: number;
     dataAlvo?: string | null;
     informacao?: string;
+    editando?: Meta | null;
   }): Promise<Meta> {
     const user = await requireUser();
     const row: Meta = {
@@ -592,10 +615,11 @@ export const metaService = {
       valor_alvo: input.valorAlvo,
       aporte_mensal: input.aporteMensal,
       data_alvo: input.dataAlvo || null,
-      concluida: false,
+      concluida: input.editando?.concluida ?? false,
       informacao: input.informacao || '',
       extra_data: '',
       ...stampNew(user.id),
+      add_date: input.editando?.add_date || now(),
     };
     const {error} = await supabase.from('meta').upsert(row, {onConflict: 'id', defaultToNull: false});
     if (error) throw error;
@@ -714,5 +738,104 @@ export const reservaService = {
 
   async removeMovimento(id: string) {
     await softDelete('reserva_movimento', id);
+  },
+};
+
+export const investimentoService = {
+  async list(): Promise<Investimento[]> {
+    const user = await requireUser();
+    const rows = await fetchAll<Investimento>('investimento', (from, to) =>
+      supabase
+        .from('investimento')
+        .select('*')
+        .eq('user_id', user.id)
+        .is('logical_delete_date', null)
+        .order('add_date', {ascending: true})
+        .range(from, to),
+    );
+    return rows.map(row => ({
+      ...row,
+      indice_percentual: Number(row.indice_percentual) || 0,
+      taxa_fixa: Number(row.taxa_fixa) || 0,
+    }));
+  },
+
+  async listMovimentos(): Promise<InvestimentoMovimento[]> {
+    const user = await requireUser();
+    const rows = await fetchAll<InvestimentoMovimento>('investimento_movimento', (from, to) =>
+      supabase
+        .from('investimento_movimento')
+        .select('*')
+        .eq('user_id', user.id)
+        .is('logical_delete_date', null)
+        .order('data', {ascending: true})
+        .range(from, to),
+    );
+    return rows.map(row => ({...row, valor: Number(row.valor) || 0}));
+  },
+
+  /** Cria e edita pela mesma porta, preservando a data de abertura da aplicação. */
+  async save(input: {
+    id?: string;
+    descricao: string;
+    tipo: TipoInvestimento;
+    indicePercentual: number;
+    taxaFixa: number;
+    metaId?: string | null;
+    liquidezDiaria?: boolean;
+    informacao?: string;
+    editando?: Investimento | null;
+  }): Promise<Investimento> {
+    const user = await requireUser();
+    const row: Investimento = {
+      id: input.id || uuid(),
+      descricao: input.descricao.trim(),
+      tipo: input.tipo,
+      indice_percentual: input.indicePercentual,
+      taxa_fixa: input.taxaFixa,
+      meta_id: input.metaId || null,
+      liquidez_diaria: input.liquidezDiaria ?? true,
+      informacao: input.informacao || '',
+      extra_data: '',
+      ...stampNew(user.id),
+      add_date: input.editando?.add_date || now(),
+    };
+    const {error} = await supabase
+      .from('investimento')
+      .upsert(row, {onConflict: 'id', defaultToNull: false});
+    if (error) throw error;
+    return row;
+  },
+
+  async remove(id: string) {
+    await softDelete('investimento', id);
+  },
+
+  async addMovimento(input: {
+    investimentoId: string;
+    mesId: string;
+    valor: number;
+    tipo: TipoMovimento;
+    data?: string;
+    informacao?: string;
+  }): Promise<InvestimentoMovimento> {
+    const user = await requireUser();
+    const row: InvestimentoMovimento = {
+      id: uuid(),
+      investimento_id: input.investimentoId,
+      mes_id: input.mesId,
+      data: input.data || now(),
+      valor: Math.abs(input.valor),
+      tipo: input.tipo,
+      informacao: input.informacao || '',
+      ...stampNew(user.id),
+    };
+    const {error} = await supabase.from('investimento_movimento').insert(row);
+    if (error) throw error;
+    return row;
+  },
+
+  async removeMovimento(id: string) {
+    await softDelete('investimento_movimento', id);
   },
 };

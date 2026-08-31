@@ -29,7 +29,7 @@ export const PlanningCard = ({
         title="Planejamento"
         subtitle={aportesMes > 0 ? `${money(aportesMes)} guardados neste mês` : 'Nada guardado neste mês ainda'}
       />
-      <div className="rows" style={{marginTop: 12}}>
+      <div className="rows card-list">
         <button type="button" className="row-item row-item-button" onClick={onOpenReserve}>
           <span className="row-icon tone-good" aria-hidden="true"><LifeBuoy size={16} /></span>
           <div className="row-main">

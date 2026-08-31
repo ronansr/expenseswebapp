@@ -83,7 +83,7 @@ export const ProfilePage = ({state, ledger, onSignOut}: Props) => {
   }
 
   return (
-    <form className="enter" onSubmit={submit} style={{display: 'flex', flexDirection: 'column', gap: 16}}>
+    <form className="enter page-stack" onSubmit={submit}>
       {error && <p className="banner" role="alert">{error}</p>}
       {feedback && !error && <p className="banner banner-info" role="status">{feedback}</p>}
 
@@ -111,7 +111,13 @@ export const ProfilePage = ({state, ledger, onSignOut}: Props) => {
           subtitle="Aplicados ao mês atual e aos próximos ao salvar."
         />
         <div className="card-body">
-          <IncomeEditor ganhos={ganhos} pessoas={ledger.pessoas} onChange={setGanhos} />
+          {/* Devolução de terceiro não se repete todo mês, então aqui só entra o que é seu. */}
+          <IncomeEditor
+            ganhos={ganhos}
+            pessoas={ledger.pessoas}
+            onChange={setGanhos}
+            allowReimbursements={false}
+          />
         </div>
       </Card>
 

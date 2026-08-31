@@ -60,7 +60,7 @@ export const PeoplePage = ({state, ledger, overview}: PageProps) => {
   };
 
   return (
-    <div className="enter" style={{display: 'flex', flexDirection: 'column', gap: 16}}>
+    <div className="enter page-stack">
       {error && <p className="banner" role="alert">{error}</p>}
       {history.error && <p className="banner" role="alert">{history.error}</p>}
 
@@ -118,7 +118,7 @@ export const PeoplePage = ({state, ledger, overview}: PageProps) => {
           title="Quem usa o seu dinheiro"
           subtitle="Some tudo o que você pagou por cada pessoa e desconte o que ela já devolveu."
         />
-        <div style={{marginTop: 12}}>
+        <div className="card-list">
           {history.loading ? (
             <RowsSkeleton rows={3} />
           ) : extratos.length === 0 ? (

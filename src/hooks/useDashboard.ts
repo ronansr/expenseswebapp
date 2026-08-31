@@ -43,6 +43,9 @@ export const useDashboard = (enabled: boolean) => {
 
   const goToCurrentMonth = useCallback(() => setMesId(toMesId(new Date())), []);
 
+  /** Salto direto para um mês, sem passar pelos meses do caminho. */
+  const goToMonth = useCallback((next: string) => setMesId(next), []);
+
   /** Lista filtrada por categoria. Filtro vazio significa todas. */
   const expenses = useMemo(() => {
     const list = dashboard?.despesas || [];
@@ -66,6 +69,7 @@ export const useDashboard = (enabled: boolean) => {
     setCategoryFilter,
     shiftMonth,
     goToCurrentMonth,
+    goToMonth,
     reload: load,
     refresh,
   };

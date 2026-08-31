@@ -3,7 +3,8 @@
 Aplicação React + Vite + TypeScript sobre Supabase. Uma pessoa, um mês por vez:
 entradas, despesas à vista, parceladas e fixas, com saldo projetado dia a dia.
 Além disso, separa o dinheiro que é seu do que só passou pela sua conta, guarda
-valor em metas e mantém uma reserva de emergência.
+valor em metas, mantém uma reserva de emergência, acompanha investimentos com
+rendimento real e avisa antes de você estourar o teto de uma categoria.
 
 ```
 npm run dev      # vite --host 0.0.0.0
@@ -22,6 +23,12 @@ Editor do Supabase ou por `supabase db push`. Elas são idempotentes.
 A migração `20260830120000_sobcontrole_pessoas_metas_reserva.sql` cria `pessoa`,
 `meta`, `meta_movimento`, `reserva` e `reserva_movimento`, adiciona
 `despesa.pessoa_id` e liga RLS por `auth.uid()` nas tabelas novas.
+
+A migração `20260901090000_sobcontrole_investimentos_limites.sql` cria
+`investimento` e `investimento_movimento`, e adiciona
+`categoriadespesa.limite_mensal`. Enquanto ela não roda, a carteira aparece
+vazia e o teto fica em zero: o aplicativo não quebra, só não oferece as duas
+funções.
 
 ---
 
@@ -94,6 +101,10 @@ saldo projetado  = entradas próprias - despesas próprias totais - aportes do m
 a receber        = despesas de terceiros - devoluções recebidas
 ```
 
+`aportes do mês` soma metas, reserva **e investimentos**, porque nos três casos o
+dinheiro saiu da conta corrente mesmo continuando seu. Quem faz essa soma é
+`aporteLiquidoMes`, e o mesmo conjunto alimenta `aportesPorDia` no gráfico.
+
 O extrato por pessoa soma **todos os meses**, não só o aberto: uma compra
 parcelada em dez vezes atravessa o ano, e o saldo devedor só faz sentido inteiro.
 Quem faz isso é `usePeopleHistory`, com `monthService.list` e
@@ -119,6 +130,51 @@ colchão que você quer alcançar, e serve só para o percentual de progresso.
 A reserva não entra no saldo projetado. Ela aparece ao lado dele: quando o mês
 fecha negativo, a tela mostra o rombo, quanto a reserva cobre e o que sobraria.
 
+### Investimentos
+Uma aplicação tem `tipo`, e o tipo diz de onde vem a taxa: `poupanca`, `cdi` e
+`selic` (com `indice_percentual`, onde 110 significa 110% do índice),
+`prefixado` (`taxa_fixa` em % ao ano) e `ipca` (`taxa_fixa` como juro real, com
+a inflação entrando por fora).
+
+**O rendimento nunca é gravado.** Ele é sempre derivado, em `src/lib/investments.ts`,
+do tempo que cada movimento passou aplicado: um aporte de ontem não pode render
+como se estivesse lá desde janeiro. CDI e Selic capitalizam em dias úteis (base
+252), os demais em dias corridos. Mudar a taxa recalcula o histórico inteiro sem
+migração de dados.
+
+As taxas vêm das séries do SGS do Banco Central, em `src/services/rates.ts`:
+4389 (CDI a.a.), 432 (meta Selic), 195 (poupança ao mês) e 433 (IPCA mensal,
+composto em doze meses). O resultado fica em `localStorage` por doze horas. Sem
+rede, cai no último valor guardado e, em último caso, no patamar do código, e
+`aoVivo: false` obriga a interface a dizer que o número é estimativa. Estimativa
+e extrato não podem parecer a mesma coisa na tela.
+
+Uma aplicação com `meta_id` preenchido vira lastro daquela meta: o progresso
+passa a somar o guardado na meta mais o saldo bruto investido. O dinheiro
+continua sendo um só, e o desconto do saldo do mês acontece uma vez, no
+movimento que realmente aconteceu.
+
+### Teto de gasto por categoria
+`categoriadespesa.limite_mensal` guarda o teto. Zero desliga o aviso.
+
+**O alerta é preditivo, e nunca é gravado.** `categoryAlerts` compara duas
+certezas e fica com a maior: o comprometido, que é tudo já lançado no mês
+inclusive o que vence depois de hoje, e o ritmo, que é o gasto por dia até agora
+esticado até o último dia. A frase resultante diz onde o mês fecha e quanto dá
+para gastar por dia sem estourar. Dizer "você gastou muito" depois do estouro não
+muda decisão nenhuma.
+
+### Projeção dos meses futuros
+`src/lib/forecast.ts` monta a série do passado recente mais doze meses à frente.
+O futuro não é chute: parcela futura já é linha no banco, porque
+`buildInstallments` cria todas de uma vez. Despesa fixa só existe até o mês
+aberto, então ela é projetada **em memória**, e a interface marca a barra do mês
+previsto como vazada.
+
+Gasto avulso não entra no futuro, então o real tende a ficar acima da barra, e a
+tela diz isso. `marcosDeAlivio` acha os meses em que a conta cai de verdade e
+nomeia o parcelamento que terminou e causou a folga.
+
 ### Mês
 `mesId` é `yyyy-MM`. Cada mês tem tambem um `unique_id`, e as despesas apontam
 para ele por `mesUniqueId`. `monthService.ensure` cria o mês se não existir,
@@ -143,25 +199,31 @@ src/
     charts/     CashflowChart, CategoryDonut
   features/     uma pasta por área do produto
     landing/ auth/ overview/ expenses/ calendar/ income/
-    recurring/ installments/ goals/ reserve/ people/
+    recurring/ installments/ goals/ investments/ reserve/ people/
     categories/ reports/ profile/
   hooks/        useSession, useDashboard, useLedger, useProfile, useTheme, useReveal
-  lib/          supabase, format (datas e moeda), selectors (derivações), errors
+  lib/          supabase, format (datas e moeda), selectors (derivações),
+                investments (juro composto), forecast (meses futuros), errors
   services/     acesso ao Supabase, único lugar que escreve
+                rates.ts busca as séries do Banco Central
   styles/       tokens, base, layout, ui, charts, features, landing
   types/        contratos das tabelas
 supabase/
   migrations/   SQL versionado do banco
 ```
 
-`useDashboard` cuida do mês aberto. `useLedger` cuida do que vive fora do mês
-(pessoas, metas, reserva e movimentos), porque o saldo de uma meta é a soma de
-todos os aportes, não só os deste mês. O resumo que junta os dois é
+`useDashboard` cuida do mês aberto, e `goToMonth` salta direto para um mês sem
+passar pelos meses do caminho. `useLedger` cuida do que vive fora do mês
+(pessoas, metas, reserva, investimentos e movimentos), porque o saldo de uma meta
+é a soma de todos os aportes, não só os deste mês. As taxas de mercado seguem por
+fora do `loading` da lista: a carteira aparece na hora e a taxa se acerta quando
+a resposta chega. O resumo que junta os dois é
 `monthOverview`, montado uma vez em `App.tsx` e passado por `PageProps`.
 
 Regras de dependencia:
 - `features/*` importa de `components`, `hooks`, `lib`, `services`. Nunca o contrario.
-- `lib/selectors.ts` é puro: recebe dados, devolve dados. Sem `fetch`, sem estado.
+- `lib/selectors.ts`, `lib/investments.ts` e `lib/forecast.ts` são puros: recebem
+  dados, devolvem dados. Sem `fetch`, sem estado.
 - Efeito colateral em banco só em `services/`.
 - Estado do painel vive em `useDashboard`; nada de duplicar totais em componentes.
 
@@ -233,8 +295,12 @@ O que anima, e por que:
 - Botão no `:active`: `scale(.975)`, feedback tátil imediato.
 - Landing: revelação ao rolar por `IntersectionObserver`, uma vez por elemento.
 
+- Barra de seleção de despesas: entra uma vez, 260ms, subindo 10px, porque
+  aparecer do nada na base da tela desorienta.
+- Escolha de mês no cabeçalho: popover de 140ms com origem no próprio título.
+
 O que **não** anima, de propósito: marcar despesa como paga, alternar mês,
-navegar pela sidebar, filtrar categoria. São ações repetidas dezenas de vezes por
+marcar uma despesa na seleção, navegar pela sidebar, filtrar categoria. São ações repetidas dezenas de vezes por
 sessão, e animação ali vira atrito.
 
 Só `transform`, `opacity` e `filter` são animados. `prefers-reduced-motion` está

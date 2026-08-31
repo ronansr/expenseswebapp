@@ -13,9 +13,23 @@ type Props = {
   onEdit: (expense: Despesa) => void;
   onDelete: (expense: Despesa) => void;
   onChanged: () => Promise<void>;
+  /** Quando verdadeiro, a linha ganha a caixa de seleção à esquerda. */
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (expense: Despesa) => void;
 };
 
-export const ExpenseRow = ({expense, categorias, pessoas = [], onEdit, onDelete, onChanged}: Props) => {
+export const ExpenseRow = ({
+  expense,
+  categorias,
+  pessoas = [],
+  onEdit,
+  onDelete,
+  onChanged,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
+}: Props) => {
   const [toggling, setToggling] = useState(false);
   const paid = expense.status === STATUS_PAID;
   const category = categorias.find(item => item.id === expense.categoriaId)?.descricao || 'Sem categoria';
@@ -32,7 +46,27 @@ export const ExpenseRow = ({expense, categorias, pessoas = [], onEdit, onDelete,
   };
 
   return (
-    <article className={`expense ${paid ? 'is-paid' : ''} ${expense.pessoa_id ? 'is-third-party' : ''}`.trim()}>
+    <article
+      className={[
+        'expense',
+        paid ? 'is-paid' : '',
+        expense.pessoa_id ? 'is-third-party' : '',
+        selectable ? 'is-selectable' : '',
+        selected ? 'is-selected' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}>
+      {selectable && (
+        <label className="expense-select">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggleSelect?.(expense)}
+            aria-label={`Selecionar ${expense.descricao}`}
+          />
+        </label>
+      )}
+
       <button
         type="button"
         className="expense-check"

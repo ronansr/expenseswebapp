@@ -2,6 +2,7 @@ import type {
   CategoriaDespesa,
   DashboardData,
   Despesa,
+  InvestimentoMovimento,
   Meta,
   MetaMovimento,
   Pessoa,
@@ -14,6 +15,7 @@ import {
   fixedDueDateForMonth,
   normalizeGanhos,
   toInputDate,
+  toMesId,
 } from './format';
 
 export const STATUS_PAID = 1;
@@ -376,22 +378,33 @@ export const reservaSaldo = (movimentos: ReservaMovimento[]) => saldoDeMovimento
 export const movimentosDoMes = <T extends Movimento>(movimentos: T[], mesId: string) =>
   movimentos.filter(item => item.mes_id === mesId);
 
-/** Quanto saiu do bolso neste mês para metas e reserva, já descontados os resgates. */
+/**
+ * Quanto saiu do bolso neste mês para metas, reserva e investimentos, já
+ * descontados os resgates. Guardar e investir tiram do saldo do mês pela mesma
+ * razão: o dinheiro saiu da conta corrente, mesmo continuando seu.
+ */
 export const aporteLiquidoMes = (
   metaMovimentos: MetaMovimento[],
   reservaMovimentos: ReservaMovimento[],
   mesId: string,
+  investimentoMovimentos: InvestimentoMovimento[] = [],
 ) =>
   saldoDeMovimentos(movimentosDoMes(metaMovimentos, mesId)) +
-  saldoDeMovimentos(movimentosDoMes(reservaMovimentos, mesId));
+  saldoDeMovimentos(movimentosDoMes(reservaMovimentos, mesId)) +
+  saldoDeMovimentos(movimentosDoMes(investimentoMovimentos, mesId));
 
 /** Aportes do mês posicionados no dia em que aconteceram, para entrar no gráfico. */
 export const aportesPorDia = (
   metaMovimentos: MetaMovimento[],
   reservaMovimentos: ReservaMovimento[],
   mesId: string,
+  investimentoMovimentos: InvestimentoMovimento[] = [],
 ): DayMovement[] =>
-  [...movimentosDoMes(metaMovimentos, mesId), ...movimentosDoMes(reservaMovimentos, mesId)].map(item => ({
+  [
+    ...movimentosDoMes(metaMovimentos, mesId),
+    ...movimentosDoMes(reservaMovimentos, mesId),
+    ...movimentosDoMes(investimentoMovimentos, mesId),
+  ].map(item => ({
     day: dayNumber(item.data),
     valor: item.tipo === 'resgate' ? -item.valor : item.valor,
   }));
@@ -423,3 +436,177 @@ export const metaProgress = (
       aporteNoMes,
     };
   });
+
+// =============================================================================
+// Teto de gasto por categoria
+// =============================================================================
+
+export type CategoryAlertLevel = 'ok' | 'atencao' | 'estouro';
+
+export type CategoryAlert = {
+  categoria: CategoriaDespesa;
+  limite: number;
+  /** Tudo o que já foi lançado na categoria neste mês, vencido ou não. */
+  gasto: number;
+  /** Só o que já venceu, e portanto define o ritmo. */
+  gastoAteHoje: number;
+  /** Onde o mês fecha se o ritmo de hoje continuar. */
+  projecao: number;
+  restante: number;
+  diasRestantes: number;
+  /** Quanto ainda dá para gastar por dia sem estourar. Negativo quer dizer que já passou. */
+  folgaDiaria: number;
+  nivel: CategoryAlertLevel;
+  mensagem: string;
+};
+
+/** Acima disto o alerta acende antes de o teto ser alcançado. */
+const LIMIAR_ATENCAO = 0.75;
+
+const brl = (value: number) =>
+  new Intl.NumberFormat('pt-BR', {style: 'currency', currency: 'BRL'}).format(value || 0);
+
+/**
+ * Alerta de teto, sempre preditivo. Ele não espera o estouro acontecer: compara
+ * o ritmo do mês com o teto e diz onde o mês fecha se nada mudar.
+ *
+ * A projeção é o maior entre dois números, porque os dois já são certos:
+ *   comprometido, tudo o que já está lançado no mês, inclusive o que vence depois de hoje;
+ *   ritmo, o gasto por dia até agora esticado até o último dia do mês.
+ */
+export const categoryAlerts = (
+  dashboard: DashboardData,
+  hoje = new Date(),
+): CategoryAlert[] => {
+  const mesId = dashboard.mes_info.id;
+  const totalDias = daysInMonth(mesId);
+  const mesCorrente = toMesId(hoje);
+  const diaDeHoje = mesId === mesCorrente ? hoje.getDate() : mesId < mesCorrente ? totalDias : 0;
+  const diasRestantes = Math.max(totalDias - diaDeHoje, 0);
+  const proprias = dashboard.despesas.filter(isOwnExpense);
+
+  return dashboard.categoria_despesas
+    .map(categoria => {
+      const limite = categoria.limite_mensal || 0;
+      const daCategoria = proprias.filter(item => item.categoriaId === categoria.id);
+      const gasto = daCategoria.reduce((acc, item) => acc + item.valor, 0);
+      const gastoAteHoje = daCategoria
+        .filter(item => dayNumber(item.vencimento) <= diaDeHoje)
+        .reduce((acc, item) => acc + item.valor, 0);
+
+      const ritmo = diaDeHoje > 0 && diaDeHoje < totalDias ? (gastoAteHoje / diaDeHoje) * totalDias : gasto;
+      const projecao = Math.max(gasto, ritmo);
+      const restante = limite - gasto;
+      const folgaDiaria = diasRestantes > 0 ? restante / diasRestantes : restante;
+
+      const nivel: CategoryAlertLevel =
+        limite <= 0
+          ? 'ok'
+          : projecao > limite
+            ? 'estouro'
+            : gasto >= limite * LIMIAR_ATENCAO
+              ? 'atencao'
+              : 'ok';
+
+      return {
+        categoria,
+        limite,
+        gasto,
+        gastoAteHoje,
+        projecao,
+        restante,
+        diasRestantes,
+        folgaDiaria,
+        nivel,
+        mensagem: mensagemDeTeto({
+          nome: categoria.descricao,
+          limite,
+          gasto,
+          projecao,
+          restante,
+          diasRestantes,
+          folgaDiaria,
+          nivel,
+          fechado: diasRestantes === 0,
+        }),
+      };
+    })
+    .filter(item => item.limite > 0);
+};
+
+/**
+ * A frase que a pessoa lê. Ela diz onde o mês termina e o que dá para fazer com
+ * o que sobra, porque um alerta que só repete o passado não ajuda a decidir.
+ */
+const mensagemDeTeto = (input: {
+  nome: string;
+  limite: number;
+  gasto: number;
+  projecao: number;
+  restante: number;
+  diasRestantes: number;
+  folgaDiaria: number;
+  nivel: CategoryAlertLevel;
+  fechado: boolean;
+}) => {
+  const {nome, limite, gasto, projecao, restante, diasRestantes, folgaDiaria, nivel, fechado} = input;
+
+  if (fechado) {
+    return restante < 0
+      ? `${nome} fechou o mês em ${brl(gasto)}, ${brl(Math.abs(restante))} acima do teto de ${brl(limite)}.`
+      : `${nome} fechou o mês em ${brl(gasto)} e ficou ${brl(restante)} abaixo do teto.`;
+  }
+
+  if (nivel === 'estouro' && restante < 0) {
+    return `${nome} já passou do teto em ${brl(Math.abs(restante))}. Faltam ${diasRestantes} dia(s) e cada gasto novo aumenta o rombo.`;
+  }
+
+  if (nivel === 'estouro') {
+    return `No ritmo de hoje, ${nome} fecha o mês em ${brl(projecao)}, ${brl(projecao - limite)} acima do teto. Para não estourar, gaste no máximo ${brl(Math.max(folgaDiaria, 0))} por dia nos ${diasRestantes} dia(s) que faltam.`;
+  }
+
+  if (nivel === 'atencao') {
+    return `${nome} já consumiu ${Math.round((gasto / limite) * 100)}% do teto com ${diasRestantes} dia(s) pela frente. Sobram ${brl(restante)}, ou ${brl(Math.max(folgaDiaria, 0))} por dia.`;
+  }
+
+  return `${nome} está em ${brl(gasto)} de ${brl(limite)}. O ritmo projeta fechar em ${brl(projecao)}.`;
+};
+
+/** Só o que precisa de atenção, do mais urgente para o menos. */
+export const activeCategoryAlerts = (alerts: CategoryAlert[]) =>
+  alerts
+    .filter(item => item.nivel !== 'ok')
+    .sort((a, b) => b.projecao - b.limite - (a.projecao - a.limite));
+
+// =============================================================================
+// Metas lastreadas por investimento
+// =============================================================================
+
+export type MetaBacking = {
+  /** Saldo investido em aplicações apontadas para esta meta. */
+  investido: number;
+  /** Guardado na meta mais o investido apontado para ela. */
+  total: number;
+  progresso: number;
+  falta: number;
+};
+
+/**
+ * Uma meta pode ser alcançada de dois jeitos ao mesmo tempo: guardando na
+ * própria meta e deixando uma aplicação apontada para ela. O dinheiro é um só,
+ * então somamos os dois e mostramos o progresso real.
+ */
+export const metaComInvestimento = (
+  progresso: MetaProgress,
+  investidoPorMeta: Map<string, number>,
+): MetaBacking => {
+  const investido = investidoPorMeta.get(progresso.meta.id) || 0;
+  const total = progresso.saldo + investido;
+  const alvo = progresso.meta.valor_alvo || 0;
+  return {
+    investido,
+    total,
+    progresso: alvo > 0 ? Math.min(total / alvo, 1) : 0,
+    falta: Math.max(alvo - total, 0),
+  };
+};

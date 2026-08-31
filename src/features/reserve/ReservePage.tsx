@@ -70,7 +70,7 @@ export const ReservePage = ({state, ledger, overview}: PageProps) => {
   };
 
   return (
-    <div className="enter" style={{display: 'flex', flexDirection: 'column', gap: 16}}>
+    <div className="enter page-stack">
       {error && <p className="banner" role="alert">{error}</p>}
       {feedback && !error && <p className="banner banner-info" role="status">{feedback}</p>}
 
@@ -120,7 +120,7 @@ export const ReservePage = ({state, ledger, overview}: PageProps) => {
             </button>
           }
         />
-        <div style={{marginTop: 12}}>
+        <div className="card-list">
           {movimentos.length === 0 ? (
             <EmptyState
               icon={<LifeBuoy size={22} />}

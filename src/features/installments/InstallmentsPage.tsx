@@ -18,7 +18,7 @@ export const InstallmentsPage = ({dashboard, onNewExpense, onEditExpense, onDele
           subtitle={`${groups.length} em andamento, ${money(total)} neste mês`}
           actions={<button type="button" className="btn btn-primary btn-sm" onClick={onNewExpense}>Novo parcelamento</button>}
         />
-        <div style={{marginTop: 12}}>
+        <div className="card-list">
           {groups.length === 0 ? (
             <EmptyState
               icon={<Layers size={22} />}

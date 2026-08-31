@@ -38,7 +38,7 @@ export const UpcomingPayments = ({expenses, pessoas, onSeeAll}: Props) => {
         />
       ) : (
         <>
-          <div className="rows" style={{marginTop: 12}}>
+          <div className="rows card-list">
             {visible.map(expense => (
               <div className="row-item" key={expense.id}>
                 <span className={`row-icon ${expense.status === STATUS_LATE ? 'tone-bad' : ''}`.trim()} aria-hidden="true">

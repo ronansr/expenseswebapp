@@ -1,5 +1,5 @@
 import {ChevronLeft, ChevronRight, Moon, Plus, RefreshCw, Sun} from 'lucide-react';
-import {monthLabel} from '../../lib/format';
+import {MonthPicker} from './MonthPicker';
 import type {Theme} from '../../hooks/useTheme';
 
 type Props = {
@@ -9,6 +9,7 @@ type Props = {
   theme: Theme;
   initials: string;
   onShiftMonth: (amount: number) => void;
+  onSelectMonth: (mesId: string) => void;
   onToday: () => void;
   onRefresh: () => void;
   onToggleTheme: () => void;
@@ -23,6 +24,7 @@ export const TopBar = ({
   theme,
   initials,
   onShiftMonth,
+  onSelectMonth,
   onToday,
   onRefresh,
   onToggleTheme,
@@ -39,10 +41,7 @@ export const TopBar = ({
       </button>
     </div>
 
-    <div className="topbar-title">
-      <h1>{monthLabel(mesId)}</h1>
-      <p>{subtitle}</p>
-    </div>
+    <MonthPicker mesId={mesId} subtitle={subtitle} onSelect={onSelectMonth} />
 
     <div className="topbar-actions">
       <button type="button" className="btn btn-ghost btn-sm" onClick={onToday}>Hoje</button>

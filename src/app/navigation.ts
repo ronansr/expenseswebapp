@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Layers,
   LifeBuoy,
+  LineChart,
   Receipt,
   Repeat,
   Settings,
@@ -22,6 +23,7 @@ export type ViewId =
   | 'recurring'
   | 'installments'
   | 'goals'
+  | 'investments'
   | 'reserve'
   | 'people'
   | 'categories'
@@ -54,6 +56,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Planejamento',
     items: [
       {id: 'goals', label: 'Metas', icon: Target},
+      {id: 'investments', label: 'Investimentos', icon: LineChart},
       {id: 'reserve', label: 'Reserva', icon: LifeBuoy},
     ],
   },
@@ -85,6 +88,7 @@ export const VIEW_TITLES: Record<ViewId, string> = {
   recurring: 'Despesas recorrentes',
   installments: 'Parcelas',
   goals: 'Metas',
+  investments: 'Investimentos',
   reserve: 'Reserva de emergência',
   people: 'Pessoas',
   categories: 'Categorias',
