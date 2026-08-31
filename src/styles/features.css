@@ -89,6 +89,34 @@
 .row-title { font-size: 13.5px; font-weight: 560; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-meta { display: flex; align-items: center; gap: var(--sp-2); font-size: 12px; color: var(--text-muted); flex-wrap: wrap; }
 .row-value { text-align: right; font-size: 13.5px; font-weight: 620; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.person-balance {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 190px;
+}
+.person-balance-label {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  text-align: right;
+  white-space: nowrap;
+}
+.person-detail { padding-left: 62px; }
+
+@media (max-width: 620px) {
+  .person-balance {
+    grid-template-columns: 1fr;
+    gap: 1px;
+    min-width: 104px;
+    justify-items: end;
+  }
+  .person-balance-label { font-size: 10.5px; }
+  .person-detail {
+    grid-template-columns: 0 minmax(0, 1fr) auto;
+    padding-left: var(--sp-4);
+  }
+}
 
 /* Despesa: linha densa com ações que só aparecem no hover no desktop */
 .expense-group + .expense-group { margin-top: var(--sp-4); }
@@ -116,15 +144,21 @@
 .expense-check {
   display: grid; place-items: center;
   width: 24px; height: 24px;
+  padding: 0;
   border: 1.5px solid var(--border-strong);
   border-radius: var(--r-pill);
   background: transparent;
   color: transparent;
+  line-height: 0;
   cursor: pointer;
   transition: border-color var(--dur-fast) var(--ease-out),
               background var(--dur-fast) var(--ease-out),
               color var(--dur-fast) var(--ease-out),
               transform var(--dur-instant) var(--ease-out);
+}
+.expense-check svg {
+  display: block;
+  transform: translate(.5px, .5px);
 }
 .expense-check:hover { border-color: var(--brand-500); }
 .expense-check:active { transform: scale(.9); }
@@ -140,11 +174,17 @@
   .expense:focus-within .expense-actions { opacity: 1; }
 }
 @media (max-width: 560px) {
-  .expense { grid-template-columns: 24px minmax(0, 1fr) auto; grid-template-areas: 'check info amount' '. actions actions'; row-gap: var(--sp-2); }
+  .expense {
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    grid-template-areas: 'check info actions' '. amount actions';
+    row-gap: var(--sp-1);
+    padding: var(--sp-3);
+  }
   .expense-check { grid-area: check; }
   .expense-info { grid-area: info; }
-  .expense-amount { grid-area: amount; }
-  .expense-actions { grid-area: actions; justify-content: flex-start; }
+  .expense-amount { grid-area: amount; justify-self: start; }
+  .expense-actions { grid-area: actions; justify-content: flex-end; align-self: center; }
+  .expense-actions .icon-btn { width: 34px; height: 34px; }
 }
 
 /* Barra de ferramentas / filtros */
@@ -291,13 +331,13 @@
 
 /* =============================================================================
    Editor de receitas, separado por dono do dinheiro
-   O que era uma grade de quatro colunas com um botao solto no fim virou um
-   cartao por entrada. A grade desalinhava no celular porque o botao caia numa
-   linha propria e o rotulo de cada campo empurrava a altura da linha.
+   Tabela densa no desktop e linhas em bloco no celular. O valor digitado e por
+   ocorrencia; o total do mes e derivado da recorrencia.
    ============================================================================= */
 .income-groups { display: flex; flex-direction: column; gap: var(--sp-6); }
 .income-group { display: flex; flex-direction: column; gap: var(--sp-3); align-items: flex-start; }
 .income-group > .btn { align-self: flex-start; }
+.income-save-icon { display: none; }
 
 .income-group-head {
   display: grid;
@@ -316,28 +356,247 @@
 .income-group-total strong { font-size: 15px; font-weight: 660; }
 .income-group-empty { font-size: 12.5px; color: var(--text-faint); padding: var(--sp-2) 0; }
 
-.income-card {
+.income-table {
   width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-3);
-  padding: var(--sp-4);
   border: 1px solid var(--border);
   border-radius: var(--r-control);
-  background: var(--surface-2);
+  overflow: hidden;
 }
-/* auto-fit em vez de calculo de porcentagem: a coluna some sozinha quando nao cabe. */
-.income-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-3) var(--sp-4); }
-.income-grid .field-wide { grid-column: 1 / -1; }
-.income-card-foot { display: flex; justify-content: flex-end; }
+.income-table-head,
+.income-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.25fr) minmax(116px, .72fr) 72px minmax(148px, .9fr) minmax(210px, 1.2fr) 124px 42px;
+  align-items: start;
+  gap: var(--sp-2);
+}
+.income-table-head {
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 620;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.income-row {
+  padding: var(--sp-3);
+  background: var(--surface);
+}
+.income-row + .income-row { border-top: 1px solid var(--border); }
+.income-cell {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.income-cell .select-wrap,
+.income-cell .input,
+.income-cell .select { min-width: 0; }
+.income-cell-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 620;
+}
+.income-day .input { min-width: 0; text-align: center; }
+.income-static {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.income-recurrence { gap: var(--sp-2); }
+.income-recurrence label,
+.income-daily-options label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.income-weekday-select,
+.income-daily-options { margin-top: 2px; }
+.income-daily-options { display: grid; gap: var(--sp-2); }
+.income-weekdays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.weekday-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 620;
+  cursor: pointer;
+}
+.weekday-chip input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.weekday-chip.is-selected {
+  border-color: var(--brand-500);
+  background: var(--brand-050);
+  color: var(--brand-600);
+}
+.income-quantity .input { width: 96px; }
+.income-recurrence-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+.income-month-total {
+  align-items: flex-end;
+  text-align: right;
+}
+.income-month-total strong { font-size: 13.5px; font-weight: 660; white-space: nowrap; }
+.income-month-total small { color: var(--text-faint); font-size: 11.5px; }
+.income-actions { align-items: flex-end; }
 .income-hint { display: flex; align-items: center; gap: var(--sp-2); font-size: 12.5px; }
 
+@media (max-width: 1100px) {
+  .income-table-head { display: none; }
+  .income-table { border: 0; overflow: visible; }
+  .income-row {
+    grid-template-columns: minmax(0, 1fr) minmax(112px, .45fr) 70px 36px;
+    grid-template-areas:
+      'description description description actions'
+      'value day origin origin'
+      'recurrence recurrence total total';
+    border: 1px solid var(--border);
+    border-radius: var(--r-control);
+    background: var(--surface-2);
+  }
+  .income-row + .income-row { margin-top: var(--sp-3); }
+  .income-cell-label {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
+  .income-description { grid-area: description; }
+  .income-value { grid-area: value; }
+  .income-day { grid-area: day; }
+  .income-origin { grid-area: origin; }
+  .income-recurrence { grid-area: recurrence; }
+  .income-month-total { grid-area: total; }
+  .income-actions { grid-area: actions; align-items: flex-end; }
+}
+
+@media (max-width: 700px) {
+  .income-group { gap: var(--sp-3); }
+  .income-row {
+    grid-template-columns: minmax(0, 1fr) 42px;
+    grid-template-areas:
+      'description actions'
+      'value value'
+      'day day'
+      'origin origin'
+      'recurrence recurrence'
+      'total total';
+    gap: var(--sp-3);
+    padding: var(--sp-3);
+  }
+  .income-origin .select,
+  .income-recurrence .select { font-size: 13px; }
+  .income-recurrence {
+    padding-top: var(--sp-2);
+    border-top: 1px solid var(--border);
+  }
+  .income-daily-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .income-weekdays {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .weekday-chip {
+    min-width: 0;
+    height: 34px;
+    padding: 0 6px;
+  }
+  .income-quantity .input { width: 100%; }
+  .income-month-total {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+    border-radius: var(--r-control);
+    background: var(--surface);
+    text-align: left;
+  }
+  .income-month-total .income-cell-label { color: var(--text); }
+  .income-month-total strong { font-size: 15px; }
+  .income-month-total small { grid-column: 1 / -1; }
+  .income-actions .icon-btn {
+    width: 38px;
+    height: 38px;
+    background: var(--surface);
+  }
+}
+
 @media (max-width: 560px) {
-  .income-grid { grid-template-columns: minmax(0, 1fr); }
+  .card-head:has(.income-save-label) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 40px;
+    align-items: start;
+    gap: var(--sp-3);
+  }
+  .card-head:has(.income-save-label) > div:first-child { min-width: 0; }
+  .card-head:has(.income-save-label) .card-head-actions {
+    margin-left: 0;
+    align-self: start;
+  }
+  .card-head:has(.income-save-label) .btn-primary {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+  }
+  .income-save-icon { display: block; }
+  .income-save-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
   .income-group-head { grid-template-columns: 28px minmax(0, 1fr); row-gap: var(--sp-2); }
   .income-group-total { grid-column: 2; align-items: flex-start; }
-  .income-card { padding: var(--sp-3); }
-  .income-card-foot { justify-content: flex-start; }
+  .income-row {
+    grid-template-columns: minmax(0, 1fr) 42px;
+    grid-template-areas:
+      'description actions'
+      'value value'
+      'day day'
+      'origin origin'
+      'recurrence recurrence'
+      'total total';
+    padding: var(--sp-3);
+  }
+  .income-month-total { align-items: flex-start; text-align: left; }
+  .income-weekdays { gap: 5px; }
+  .weekday-chip { flex: 1 0 42px; }
 }
 
 /* =============================================================================
@@ -356,7 +615,7 @@
 @media (max-width: 560px) {
   .expense.is-selectable {
     grid-template-columns: 22px 24px minmax(0, 1fr) auto;
-    grid-template-areas: 'pick check info amount' '. . actions actions';
+    grid-template-areas: 'pick check info actions' '. . amount actions';
   }
   .expense.is-selectable .expense-select { grid-area: pick; }
 }

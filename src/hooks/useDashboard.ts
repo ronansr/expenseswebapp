@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useMemo, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {addMonths} from 'date-fns';
 import {dashboardService} from '../services';
 import type {DashboardData} from '../types';
@@ -13,17 +13,22 @@ export const useDashboard = (enabled: boolean) => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const requestRef = useRef(0);
 
   const load = useCallback(async () => {
+    const requestId = requestRef.current + 1;
+    requestRef.current = requestId;
     setLoading(true);
     setError('');
     try {
-      setDashboard(await dashboardService.get(mesId));
+      const next = await dashboardService.get(mesId);
+      if (requestRef.current === requestId) setDashboard(next);
     } catch (err) {
+      if (requestRef.current !== requestId) return;
       console.error('Erro ao carregar dados:', err);
       setError(errorMessage(err));
     } finally {
-      setLoading(false);
+      if (requestRef.current === requestId) setLoading(false);
     }
   }, [mesId]);
 
@@ -47,19 +52,21 @@ export const useDashboard = (enabled: boolean) => {
   const goToMonth = useCallback((next: string) => setMesId(next), []);
 
   /** Lista filtrada por categoria. Filtro vazio significa todas. */
+  const currentDashboard = dashboard?.mes_info.id === mesId ? dashboard : null;
+
   const expenses = useMemo(() => {
-    const list = dashboard?.despesas || [];
+    const list = currentDashboard?.despesas || [];
     return categoryFilter.length ? list.filter(item => categoryFilter.includes(item.categoriaId)) : list;
-  }, [dashboard, categoryFilter]);
+  }, [currentDashboard, categoryFilter]);
 
   const totals = useMemo(
-    () => monthTotals(expenses, dashboard?.mes_info.total_ganhos || 0),
-    [expenses, dashboard],
+    () => monthTotals(expenses, currentDashboard?.mes_info.total_ganhos || 0),
+    [expenses, currentDashboard],
   );
 
   return {
     mesId,
-    dashboard,
+    dashboard: currentDashboard,
     expenses,
     totals,
     loading,

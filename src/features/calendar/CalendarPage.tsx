@@ -1,4 +1,4 @@
-import {useMemo, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {ArrowDownLeft, CalendarDays, TrendingUp} from 'lucide-react';
 import {Card, CardHeader} from '../../components/ui/Card';
 import {EmptyState} from '../../components/ui/EmptyState';
@@ -17,6 +17,7 @@ import {
   firstWeekdayOffset,
   isSameDayAsToday,
   money,
+  movimentosEntradaNoMes,
   toInputDate,
 } from '../../lib/format';
 import type {PageProps} from '../../app/pageProps';
@@ -35,6 +36,10 @@ export const CalendarPage = ({
 }: PageProps) => {
   const [modo, setModo] = useState<Modo>('vencimentos');
   const [selected, setSelected] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelected(null);
+  }, [state.mesId]);
 
   const aportes = useMemo(
     () =>
@@ -80,10 +85,14 @@ export const CalendarPage = ({
   const dayGains =
     diaSelecionado === null
       ? []
-      : ganhosDoMes.filter(item => (item.dia_entrada || 1) === diaSelecionado);
+      : ganhosDoMes.flatMap(item =>
+          movimentosEntradaNoMes(item, state.mesId)
+            .filter(movimento => movimento.day === diaSelecionado)
+            .map(movimento => ({item, day: movimento.day, valor: movimento.valor})),
+        );
 
   const totalSaidasDoDia = dayExpenses.reduce((acc, item) => acc + item.valor, 0);
-  const totalEntradasDoDia = dayGains.reduce((acc, item) => acc + (item.valor || 0), 0);
+  const totalEntradasDoDia = dayGains.reduce((acc, item) => acc + item.valor, 0);
 
   return (
     <div className="enter page-stack">
@@ -186,19 +195,19 @@ export const CalendarPage = ({
           {modo === 'fluxo' && dayGains.length > 0 && (
             <div className="rows">
               {dayGains.map(gain => (
-                <div className="row-item" key={gain.id}>
+                <div className="row-item" key={`${gain.item.id}-${gain.day}`}>
                   <span
-                    className={`row-icon ${isReimbursement(gain) ? 'tone-info' : 'tone-good'}`}
+                    className={`row-icon ${isReimbursement(gain.item) ? 'tone-info' : 'tone-good'}`}
                     aria-hidden="true">
-                    {isReimbursement(gain) ? <ArrowDownLeft size={16} /> : <TrendingUp size={16} />}
+                    {isReimbursement(gain.item) ? <ArrowDownLeft size={16} /> : <TrendingUp size={16} />}
                   </span>
                   <div className="row-main">
-                    <span className="row-title">{gain.descricao || 'Entrada'}</span>
+                    <span className="row-title">{gain.item.descricao || 'Entrada'}</span>
                     <span className="row-meta">
-                      {isReimbursement(gain) ? 'Devolução de terceiro' : 'Receita sua'}
+                      {isReimbursement(gain.item) ? 'Devolução de terceiro' : 'Receita sua'}
                     </span>
                   </div>
-                  <strong className="row-value text-good">+{money(gain.valor || 0)}</strong>
+                  <strong className="row-value text-good">+{money(gain.valor)}</strong>
                 </div>
               ))}
             </div>

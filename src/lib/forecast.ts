@@ -1,5 +1,5 @@
 import type {Despesa, Mes, ValorResumo} from '../types';
-import {addMonthsIso, fixedDueDateForMonth, toMesId} from './format';
+import {addMonthsIso, fixedDueDateForMonth, toMesId, totalGanhosNoMes} from './format';
 import {activeGains, isOwnExpense, isReimbursement} from './selectors';
 
 /**
@@ -87,10 +87,6 @@ export const projetarMeses = ({
       if (!atual || item.mesId > atual.mesId) fixasConhecidas.set(chave, item);
     });
 
-  const entradasRecorrentes = ganhosRecorrentes
-    .filter(item => !isReimbursement(item))
-    .reduce((acc, item) => acc + (item.valor || 0), 0);
-
   const linha = (mesId: string, futuro: boolean): MesProjetado => {
     const doMes = porMes.get(mesId) || [];
     const jaTemFixa = new Set(doMes.filter(item => item.despesa_fixa_id).map(item => item.despesa_fixa_id));
@@ -115,8 +111,8 @@ export const projetarMeses = ({
     const mesRow = mesPorId.get(mesId);
     const ganhosDoMes = mesRow ? activeGains(mesRow.ganhos_mes).filter(item => !isReimbursement(item)) : [];
     const entradas = ganhosDoMes.length
-      ? ganhosDoMes.reduce((acc, item) => acc + (item.valor || 0), 0)
-      : entradasRecorrentes;
+      ? totalGanhosNoMes(ganhosDoMes, mesId)
+      : totalGanhosNoMes(ganhosRecorrentes.filter(item => !isReimbursement(item)), mesId);
 
     const fixas = fixasLancadas + fixasProjetadas;
     /* No futuro, gasto avulso ainda não existe: só entra o que já está comprometido. */

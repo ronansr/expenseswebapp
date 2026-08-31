@@ -1,4 +1,6 @@
 export type OrigemEntrada = 'propria' | 'reembolso';
+export type RecorrenciaEntrada = 'mensal' | 'semanal' | 'diaria';
+export type RecorrenciaDiariaModo = 'dias_semana' | 'quantidade';
 
 export type ValorResumo = {
   id: string;
@@ -12,6 +14,16 @@ export type ValorResumo = {
   origem?: OrigemEntrada | null;
   /** Pessoa que está pagando o reembolso. Só faz sentido junto de origem 'reembolso'. */
   pessoa_id?: string | null;
+  /** Como o valor se repete dentro do mes. Ausente preserva o comportamento antigo: mensal. */
+  recorrencia?: RecorrenciaEntrada | null;
+  /** Dias da semana, 0 domingo ate 6 sabado. Usado em semanal e diaria por dias escolhidos. */
+  dias_semana?: number[] | null;
+  /** Para diaria por quantidade: quantos dias de recebimento existem no mes. */
+  quantidade_dias?: number | null;
+  /** Define se diaria usa dias da semana ou uma quantidade mensal informada. */
+  recorrencia_diaria_modo?: RecorrenciaDiariaModo | null;
+  /** Preenchido em memoria quando uma entrada vem do historico de meses. */
+  mes_id?: string;
 };
 
 export type UserData = {

@@ -1,16 +1,14 @@
-import {useState, type FormEvent} from 'react';
-import {ArrowDownLeft, HandCoins, Wallet} from 'lucide-react';
+import {useEffect, useState, type FormEvent} from 'react';
+import {ArrowDownLeft, HandCoins, Save, Wallet} from 'lucide-react';
 import {Card, CardHeader} from '../../components/ui/Card';
 import {KpiCard} from '../overview/KpiCard';
 import {IncomeEditor} from './IncomeEditor';
 import {monthService} from '../../services';
-import {activeGains, splitGains} from '../../lib/selectors';
+import {activeGains, splitGains, sumGainsForMonth} from '../../lib/selectors';
 import {money, monthLabel} from '../../lib/format';
 import {errorMessage} from '../../lib/errors';
 import type {ValorResumo} from '../../types';
 import type {PageProps} from '../../app/pageProps';
-
-const somar = (itens: ValorResumo[]) => itens.reduce((acc, item) => acc + (item.valor || 0), 0);
 
 export const IncomePage = ({dashboard, state, ledger, overview}: PageProps) => {
   const [ganhos, setGanhos] = useState<ValorResumo[]>(activeGains(dashboard.mes_info.ganhos_mes));
@@ -18,9 +16,18 @@ export const IncomePage = ({dashboard, state, ledger, overview}: PageProps) => {
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
 
+  useEffect(() => {
+    setGanhos(activeGains(dashboard.mes_info.ganhos_mes));
+  }, [dashboard.mes_info.ganhos_mes, dashboard.mes_info.id]);
+
+  useEffect(() => {
+    setError('');
+    setSaved(false);
+  }, [dashboard.mes_info.id]);
+
   const {proprias, reembolsos} = splitGains(ganhos);
-  const totalProprias = somar(proprias);
-  const totalReembolsos = somar(reembolsos);
+  const totalProprias = sumGainsForMonth(proprias, state.mesId);
+  const totalReembolsos = sumGainsForMonth(reembolsos, state.mesId);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -75,12 +82,13 @@ export const IncomePage = ({dashboard, state, ledger, overview}: PageProps) => {
           subtitle={`${money(totalProprias)} seus, ${money(totalReembolsos)} de devolução`}
           actions={
             <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? 'Salvando...' : 'Salvar'}
+              <Save className="income-save-icon" size={16} aria-hidden="true" />
+              <span className="income-save-label">{saving ? 'Salvando...' : 'Salvar'}</span>
             </button>
           }
         />
         <div className="card-body">
-          <IncomeEditor ganhos={ganhos} pessoas={ledger.pessoas} onChange={setGanhos} />
+          <IncomeEditor ganhos={ganhos} pessoas={ledger.pessoas} mesId={state.mesId} onChange={setGanhos} />
         </div>
       </Card>
     </form>

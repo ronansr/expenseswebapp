@@ -25,6 +25,7 @@ import {
   normalizeGanhos,
   nowIso,
   serializeGanhos,
+  totalGanhosNoMes,
   toInputDate,
   toIsoFromInputDate,
   toMesId,
@@ -255,7 +256,7 @@ export const monthService = {
     const user = await requireUser();
     const profile = await userService.getUser();
     const ganhos = normalizeGanhos(profile?.ganhos_mensais);
-    const total = ganhos.reduce((sum, item) => sum + (item.valor || 0), 0);
+    const total = totalGanhosNoMes(ganhos, mesId);
     const now = nowIso();
     const row = {
       id: mesId,
@@ -277,7 +278,7 @@ export const monthService = {
 
   async updateGanhosMes(mes: Mes, ganhos: ValorResumo[]) {
     const now = nowIso();
-    const total = ganhos.reduce((sum, item) => sum + (item.valor || 0), 0);
+    const total = totalGanhosNoMes(ganhos, mes.id);
     const {error} = await supabase
       .from('mes')
       .update({

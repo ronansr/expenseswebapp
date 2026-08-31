@@ -13,9 +13,12 @@ import {
   daysInMonth,
   dayNumber,
   fixedDueDateForMonth,
+  movimentosEntradaNoMes,
   normalizeGanhos,
+  totalGanhosNoMes,
   toInputDate,
   toMesId,
+  valorMensalEntrada,
 } from './format';
 
 export const STATUS_PAID = 1;
@@ -102,8 +105,10 @@ export const dailyFlow = (dashboard: DashboardData, options: FlowOptions = {}): 
   const saidas = new Array<number>(last + 1).fill(0);
 
   gains.forEach(item => {
-    const day = Math.min(Math.max(item.dia_entrada || 1, 1), last);
-    entradas[day] += item.valor || 0;
+    movimentosEntradaNoMes(item, mesId).forEach(movimento => {
+      const day = Math.min(Math.max(movimento.day, 1), last);
+      entradas[day] += movimento.valor || 0;
+    });
   });
   despesas.forEach(item => {
     const day = Math.min(Math.max(dayNumber(item.vencimento), 1), last);
@@ -286,7 +291,7 @@ export const splitGains = (ganhos: ValorResumo[]) => ({
   reembolsos: ganhos.filter(isReimbursement),
 });
 
-const sumGains = (ganhos: ValorResumo[]) => ganhos.reduce((acc, item) => acc + (item.valor || 0), 0);
+export const sumGainsForMonth = (ganhos: ValorResumo[], mesId: string) => totalGanhosNoMes(ganhos, mesId);
 
 export type MonthOverview = {
   /** Totais só do que e seu. */
@@ -310,13 +315,14 @@ export type MonthOverview = {
 export const monthOverview = (input: {
   expenses: Despesa[];
   ganhos: ValorResumo[];
+  mesId: string;
   aportesMes: number;
   reservaSaldo: number;
 }): MonthOverview => {
   const {proprias, terceiros} = splitExpenses(input.expenses);
   const gains = splitGains(input.ganhos);
-  const entradasProprias = sumGains(gains.proprias);
-  const reembolsos = sumGains(gains.reembolsos);
+  const entradasProprias = sumGainsForMonth(gains.proprias, input.mesId);
+  const reembolsos = sumGainsForMonth(gains.reembolsos, input.mesId);
 
   const totaisProprias = monthTotals(proprias, entradasProprias);
   const totaisTerceiros = monthTotals(terceiros, reembolsos);
@@ -329,7 +335,7 @@ export const monthOverview = (input: {
     terceiros: totaisTerceiros,
     entradasProprias,
     reembolsos,
-    aReceber: totaisTerceiros.total - reembolsos,
+    aReceber: totaisTerceiros.paid - reembolsos,
     aportesMes: input.aportesMes,
     reservaSaldo: input.reservaSaldo,
     saldoDisponivel,
@@ -340,7 +346,14 @@ export const monthOverview = (input: {
 
 export type PessoaLedger = {
   pessoa: Pessoa;
+  /** Tudo que foi atribuido a pessoa, pago ou ainda previsto. */
   lancado: number;
+  /** Somente despesas que voce ja marcou como pagas. */
+  adiantado: number;
+  /** Despesas da pessoa que ainda nao sairam do seu bolso. */
+  emAberto: number;
+  pendente: number;
+  vencido: number;
   reembolsado: number;
   aReceber: number;
   despesas: Despesa[];
@@ -353,12 +366,24 @@ export const peopleLedger = (
   ganhos: ValorResumo[],
 ): PessoaLedger[] =>
   pessoas.map(pessoa => {
-    const despesas = expenses.filter(item => item.pessoa_id === pessoa.id);
+    const despesas = expenses
+      .filter(item => item.pessoa_id === pessoa.id)
+      .sort((a, b) => toInputDate(a.vencimento).localeCompare(toInputDate(b.vencimento)));
     const lancado = despesas.reduce((acc, item) => acc + item.valor, 0);
+    const adiantado = despesas
+      .filter(item => item.status === STATUS_PAID)
+      .reduce((acc, item) => acc + item.valor, 0);
+    const pendente = despesas
+      .filter(item => item.status === STATUS_PENDING)
+      .reduce((acc, item) => acc + item.valor, 0);
+    const vencido = despesas
+      .filter(item => item.status === STATUS_LATE)
+      .reduce((acc, item) => acc + item.valor, 0);
+    const emAberto = pendente + vencido;
     const reembolsado = ganhos
       .filter(item => item.pessoa_id === pessoa.id)
-      .reduce((acc, item) => acc + (item.valor || 0), 0);
-    return {pessoa, lancado, reembolsado, aReceber: lancado - reembolsado, despesas};
+      .reduce((acc, item) => acc + valorMensalEntrada(item, item.mes_id || toMesId(new Date())), 0);
+    return {pessoa, lancado, adiantado, emAberto, pendente, vencido, reembolsado, aReceber: adiantado - reembolsado, despesas};
   });
 
 // =============================================================================

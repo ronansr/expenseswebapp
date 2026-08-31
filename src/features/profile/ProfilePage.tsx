@@ -60,8 +60,15 @@ export const ProfilePage = ({state, ledger, onSignOut}: Props) => {
 
   const exportCsv = () => {
     const rows = [
-      ['descricao', 'valor', 'dia_entrada'],
-      ...ganhos.map(item => [item.descricao, String(item.valor), String(item.dia_entrada || '')]),
+      ['descricao', 'valor', 'dia_entrada', 'recorrencia', 'dias_semana', 'quantidade_dias'],
+      ...ganhos.map(item => [
+        item.descricao,
+        String(item.valor),
+        String(item.dia_entrada || ''),
+        item.recorrencia || 'mensal',
+        (item.dias_semana || []).join('|'),
+        String(item.quantidade_dias || ''),
+      ]),
     ];
     const blob = new Blob([rows.map(row => row.join(',')).join('\n')], {type: 'text/csv;charset=utf-8'});
     const url = URL.createObjectURL(blob);
@@ -115,6 +122,7 @@ export const ProfilePage = ({state, ledger, onSignOut}: Props) => {
           <IncomeEditor
             ganhos={ganhos}
             pessoas={ledger.pessoas}
+            mesId={state.mesId}
             onChange={setGanhos}
             allowReimbursements={false}
           />

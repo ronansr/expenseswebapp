@@ -25,7 +25,7 @@ export const usePeopleHistory = (version: number) => {
         const todas = await expenseService.listByMonths(meses);
         if (!active) return;
         setDespesas(todas);
-        setGanhos(meses.flatMap(mes => activeGains(mes.ganhos_mes)));
+        setGanhos(meses.flatMap(mes => activeGains(mes.ganhos_mes).map(item => ({...item, mes_id: mes.id}))));
       } catch (err) {
         if (active) setError(errorMessage(err, 'Não foi possível carregar o histórico.'));
       } finally {

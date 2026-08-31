@@ -4,6 +4,7 @@ import {Card, CardHeader} from '../../components/ui/Card';
 import {EmptyState} from '../../components/ui/EmptyState';
 import {Field} from '../../components/ui/Field';
 import {RowsSkeleton} from '../../components/ui/Skeleton';
+import {StatusPill} from '../../components/ui/StatusPill';
 import {KpiCard} from '../overview/KpiCard';
 import {pessoaService} from '../../services';
 import {peopleLedger, splitExpenses} from '../../lib/selectors';
@@ -24,8 +25,11 @@ export const PeoplePage = ({state, ledger, overview}: PageProps) => {
     () => peopleLedger(ledger.pessoas, history.despesas, history.ganhos),
     [ledger.pessoas, history.despesas, history.ganhos],
   );
-  const totalAReceber = extratos.reduce((acc, item) => acc + item.aReceber, 0);
+  const totalAReceber = extratos.reduce((acc, item) => acc + Math.max(item.aReceber, 0), 0);
   const doMes = splitExpenses(state.expenses).terceiros;
+  const emAbertoNoMes = doMes
+    .filter(item => item.status !== 1)
+    .reduce((acc, item) => acc + item.valor, 0);
 
   const criar = async () => {
     const label = nome.trim();
@@ -68,7 +72,7 @@ export const PeoplePage = ({state, ledger, overview}: PageProps) => {
         <KpiCard
           label="Gastos de terceiros neste mês"
           value={overview.terceiros.total}
-          footnote={`${doMes.length} lançamento(s) que não são seus`}
+          footnote={`${doMes.length} lançamento(s), ${money(emAbertoNoMes)} ainda em aberto`}
           icon={Users}
           tone="info"
         />
@@ -82,7 +86,7 @@ export const PeoplePage = ({state, ledger, overview}: PageProps) => {
         <KpiCard
           label="A receber, somando todos os meses"
           value={totalAReceber}
-          footnote="O que ainda não voltou para você"
+          footnote="Só o que você já pagou e ainda não voltou"
           icon={HandCoins}
           tone={totalAReceber > 0 ? 'warn' : 'good'}
         />
@@ -116,7 +120,7 @@ export const PeoplePage = ({state, ledger, overview}: PageProps) => {
       <Card>
         <CardHeader
           title="Quem usa o seu dinheiro"
-          subtitle="Some tudo o que você pagou por cada pessoa e desconte o que ela já devolveu."
+          subtitle="Separa o que foi lançado, o que você já pagou e o que a pessoa já devolveu."
         />
         <div className="card-list">
           {history.loading ? (
@@ -136,7 +140,11 @@ export const PeoplePage = ({state, ledger, overview}: PageProps) => {
                     <div className="row-main">
                       <span className="row-title">{extrato.pessoa.nome}</span>
                       <span className="row-meta">
-                        {money(extrato.lancado)} lançados, {money(extrato.reembolsado)} devolvidos
+                        {money(extrato.lancado)} lançados
+                        <span className="pill pill-info">{money(extrato.adiantado)} pagos por você</span>
+                        {extrato.emAberto > 0 && <span className="pill">{money(extrato.emAberto)} em aberto</span>}
+                        {extrato.vencido > 0 && <span className="pill pill-bad">{money(extrato.vencido)} vencidos</span>}
+                        <span className="pill pill-good">{money(extrato.reembolsado)} devolvidos</span>
                         {extrato.despesas.length > 0 && (
                           <button
                             type="button"
@@ -147,9 +155,10 @@ export const PeoplePage = ({state, ledger, overview}: PageProps) => {
                         )}
                       </span>
                     </div>
-                    <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+                    <div className="person-balance">
+                      <span className="person-balance-label">{extrato.aReceber >= 0 ? 'a receber agora' : 'crédito da pessoa'}</span>
                       <strong className={`row-value ${extrato.aReceber > 0 ? 'text-warn' : 'text-good'}`}>
-                        {money(extrato.aReceber)}
+                        {money(Math.abs(extrato.aReceber))}
                       </strong>
                       <button
                         type="button"
@@ -164,12 +173,13 @@ export const PeoplePage = ({state, ledger, overview}: PageProps) => {
 
                   {aberta === extrato.pessoa.id &&
                     extrato.despesas.map(despesa => (
-                      <div className="row-item" key={despesa.id} style={{paddingLeft: 62}}>
+                      <div className="row-item person-detail" key={despesa.id}>
                         <span />
                         <div className="row-main">
                           <span className="row-title">{despesa.descricao}</span>
                           <span className="row-meta">
                             {shortDate(despesa.vencimento)}
+                            <StatusPill status={despesa.status} />
                             {despesa.totalParcelas > 1 && (
                               <span className="pill pill-info">{despesa.parcela}/{despesa.totalParcelas}</span>
                             )}

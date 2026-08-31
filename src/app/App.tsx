@@ -119,6 +119,7 @@ export const App = () => {
   const overview = monthOverview({
     expenses: state.expenses,
     ganhos: state.dashboard ? activeGains(state.dashboard.mes_info.ganhos_mes) : [],
+    mesId: state.mesId,
     aportesMes: aporteLiquidoMes(
       ledger.metaMovimentos,
       ledger.reservaMovimentos,
