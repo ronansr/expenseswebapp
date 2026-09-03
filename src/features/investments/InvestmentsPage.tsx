@@ -1,11 +1,24 @@
 import {useMemo, useState} from 'react';
-import {Coins, LineChart, Pencil, Plus, Target, Trash2, TrendingUp, Wallet, X} from 'lucide-react';
+import {
+  ChevronDown,
+  Coins,
+  LineChart,
+  Pencil,
+  Plus,
+  Target,
+  Trash2,
+  TrendingUp,
+  Wallet,
+  X,
+} from 'lucide-react';
 import {Card, CardHeader} from '../../components/ui/Card';
 import {EmptyState} from '../../components/ui/EmptyState';
 import {Field, SelectWrap} from '../../components/ui/Field';
 import {MoneyInput} from '../../components/ui/MoneyInput';
 import {MovementModal} from '../../components/ui/MovementModal';
+import {Segmented} from '../../components/ui/Segmented';
 import {KpiCard} from '../overview/KpiCard';
+import {MovementList} from './MovementList';
 import {RatesCard} from './RatesCard';
 import {investimentoService} from '../../services';
 import {
@@ -15,8 +28,15 @@ import {
   taxaMediaCarteira,
 } from '../../lib/investments';
 import {money, parseMoney, shortDate, toMesId} from '../../lib/format';
+import {saiuDoMes} from '../../lib/selectors';
 import {errorMessage} from '../../lib/errors';
-import type {Investimento, TipoInvestimento, TipoMovimento} from '../../types';
+import type {
+  Investimento,
+  InvestimentoMovimento,
+  OrigemAporte,
+  TipoInvestimento,
+  TipoMovimento,
+} from '../../types';
 import type {PageProps} from '../../app/pageProps';
 
 const FORM_VAZIO = {
@@ -26,6 +46,12 @@ const FORM_VAZIO = {
   taxaFixa: '10',
   metaId: '',
   aporteInicial: '',
+  /*
+   * Quem cadastra uma aplicação quase sempre está registrando dinheiro que já
+   * estava lá. Descontar isso do mês faria o mês parecer pior do que foi, então
+   * o padrão do saldo inicial é dinheiro de fora.
+   */
+  origemInicial: 'externo' as OrigemAporte,
 };
 
 const TIPOS: {value: TipoInvestimento; label: string; ajuda: string}[] = [
@@ -43,6 +69,7 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
   const [form, setForm] = useState(FORM_VAZIO);
   const [editando, setEditando] = useState<Investimento | null>(null);
   const [movimentando, setMovimentando] = useState<Investimento | null>(null);
+  const [extratoAberto, setExtratoAberto] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -56,13 +83,29 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
   const nomeDaMeta = (metaId?: string | null) =>
     metaId ? ledger.metas.find(item => item.id === metaId)?.descricao : undefined;
 
-  const aportadoNoMes = useMemo(
-    () =>
-      ledger.investimentoMovimentos
-        .filter(item => item.mes_id === state.mesId)
-        .reduce((acc, item) => acc + (item.tipo === 'resgate' ? -item.valor : item.valor), 0),
-    [ledger.investimentoMovimentos, state.mesId],
-  );
+  /*
+   * O mês tem duas histórias diferentes: o que saiu do recebimento deste mês, e
+   * o que só foi registrado porque já era seu. Somar os dois esconderia
+   * justamente a diferença que faz o saldo do mês bater.
+   */
+  const aportadoNoMes = useMemo(() => {
+    const doMes = ledger.investimentoMovimentos.filter(item => item.mes_id === state.mesId);
+    const soma = (lista: InvestimentoMovimento[]) =>
+      lista.reduce((acc, item) => acc + (item.tipo === 'resgate' ? -item.valor : item.valor), 0);
+    return {
+      caixa: soma(doMes.filter(saiuDoMes)),
+      fora: soma(doMes.filter(item => !saiuDoMes(item))),
+    };
+  }, [ledger.investimentoMovimentos, state.mesId]);
+
+  const notaDoMes =
+    aportadoNoMes.caixa !== 0 && aportadoNoMes.fora !== 0
+      ? `${money(aportadoNoMes.caixa)} saiu do mês, ${money(aportadoNoMes.fora)} já era seu`
+      : aportadoNoMes.caixa !== 0
+        ? `${money(aportadoNoMes.caixa)} saiu do saldo deste mês`
+        : aportadoNoMes.fora !== 0
+          ? `${money(aportadoNoMes.fora)} registrado sem mexer no mês`
+          : 'Estimativa no patamar de hoje';
 
   const limpar = () => {
     setForm(FORM_VAZIO);
@@ -78,6 +121,7 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
       taxaFixa: String(investimento.taxa_fixa ?? 0),
       metaId: investimento.meta_id || '',
       aporteInicial: '',
+      origemInicial: FORM_VAZIO.origemInicial,
     });
   };
 
@@ -104,7 +148,8 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
           mesId: state.mesId,
           valor: inicial,
           tipo: 'aporte',
-          informacao: 'Aporte inicial',
+          informacao: form.origemInicial === 'externo' ? 'Saldo já aplicado' : 'Aporte inicial',
+          origem: form.origemInicial,
         });
       }
 
@@ -131,7 +176,12 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
     }
   };
 
-  const registrarMovimento = async (valor: number, tipo: TipoMovimento, informacao: string) => {
+  const registrarMovimento = async (
+    valor: number,
+    tipo: TipoMovimento,
+    informacao: string,
+    origem: OrigemAporte,
+  ) => {
     if (!movimentando) return;
     await investimentoService.addMovimento({
       investimentoId: movimentando.id,
@@ -139,9 +189,37 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
       valor,
       tipo,
       informacao,
+      origem,
     });
     setMovimentando(null);
     await ledger.reload();
+  };
+
+  /* Corrigir a origem muda o saldo do mês na hora, então o mês recarrega junto. */
+  const trocarOrigem = async (movimento: InvestimentoMovimento, origem: OrigemAporte) => {
+    setBusy(true);
+    setError('');
+    try {
+      await investimentoService.setMovimentoOrigem(movimento.id, origem);
+      await Promise.all([ledger.reload(), state.reload()]);
+    } catch (err) {
+      setError(errorMessage(err, 'Não foi possível mudar a origem do movimento.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removerMovimento = async (movimento: InvestimentoMovimento) => {
+    setBusy(true);
+    setError('');
+    try {
+      await investimentoService.removeMovimento(movimento.id);
+      await Promise.all([ledger.reload(), state.reload()]);
+    } catch (err) {
+      setError(errorMessage(err, 'Não foi possível excluir o movimento.'));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const posicaoAberta = movimentando
@@ -187,11 +265,7 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
         <KpiCard
           label="Rende por mês"
           value={carteira.rendimentoMensalEstimado}
-          footnote={
-            aportadoNoMes !== 0
-              ? `Você aportou ${money(aportadoNoMes)} neste mês`
-              : 'Estimativa no patamar de hoje'
-          }
+          footnote={notaDoMes}
           icon={LineChart}
         />
       </div>
@@ -202,19 +276,21 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
         <Card>
           <CardHeader
             title="Sua carteira"
-            subtitle="O rendimento é recalculado a cada leitura, pelo tempo que cada aporte passou aplicado."
+            subtitle="O rendimento é recalculado a cada leitura, pelo tempo que cada aporte passou aplicado. Abra o extrato para dizer o que saiu do mês e o que já era seu."
           />
           <div className="card-list">
             {posicoes.length === 0 ? (
               <EmptyState
                 icon={<TrendingUp size={22} />}
                 title="Nenhuma aplicação cadastrada"
-                description="Cadastre onde o seu dinheiro está no formulário ao lado. O aporte sai do saldo do mês, igual a um valor guardado em meta."
+                description="Cadastre onde o seu dinheiro está no formulário ao lado. Você diz se o valor saiu do recebimento do mês ou se já era seu, e só o primeiro caso desconta do saldo."
               />
             ) : (
               <div className="rows">
                 {posicoes.map(posicao => {
                   const meta = nomeDaMeta(posicao.investimento.meta_id);
+                  const aberto = extratoAberto === posicao.investimento.id;
+                  const foraDoMes = posicao.movimentos.filter(item => !saiuDoMes(item)).length;
                   return (
                     <article
                       className={`invest-row ${editando?.id === posicao.investimento.id ? 'is-editing' : ''}`.trim()}
@@ -244,6 +320,11 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
                               <Target size={11} aria-hidden="true" /> {meta}
                             </span>
                           )}
+                          {foraDoMes > 0 && (
+                            <span className="pill">
+                              {foraDoMes} movimento(s) fora do mês
+                            </span>
+                          )}
                         </span>
 
                         <div className="invest-figures">
@@ -263,9 +344,30 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
                             <span className="text-muted">Desde {shortDate(posicao.primeiroAporte)}</span>
                           )}
                         </div>
+
+                        {aberto && (
+                          <MovementList
+                            movimentos={posicao.movimentos}
+                            busy={busy}
+                            onChangeOrigem={trocarOrigem}
+                            onRemove={removerMovimento}
+                          />
+                        )}
                       </div>
 
                       <div className="invest-actions">
+                        <button
+                          type="button"
+                          className={`btn btn-ghost btn-sm ${aberto ? 'is-active' : ''}`.trim()}
+                          aria-expanded={aberto}
+                          onClick={() =>
+                            setExtratoAberto(current =>
+                              current === posicao.investimento.id ? null : posicao.investimento.id,
+                            )
+                          }>
+                          Extrato ({posicao.movimentos.length})
+                          <ChevronDown size={14} className={`chevron ${aberto ? 'is-open' : ''}`.trim()} />
+                        </button>
                         <button
                           type="button"
                           className="btn btn-ghost btn-sm"
@@ -394,14 +496,37 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
                 </Field>
 
                 {!editando && (
-                  <Field
-                    label="Aporte inicial"
-                    hint={`Opcional. Entra como saída de ${toMesId(new Date()) === state.mesId ? 'hoje' : 'do mês aberto'}.`}>
-                    <MoneyInput
-                      value={form.aporteInicial}
-                      onChange={value => setForm({...form, aporteInicial: value})}
-                    />
-                  </Field>
+                  <>
+                    <Field
+                      label="Saldo inicial"
+                      hint="Opcional. Quanto já está aplicado nesta conta hoje.">
+                      <MoneyInput
+                        value={form.aporteInicial}
+                        onChange={value => setForm({...form, aporteInicial: value})}
+                      />
+                    </Field>
+
+                    {parseMoney(form.aporteInicial) > 0 && (
+                      <Field
+                        label="De onde veio esse dinheiro"
+                        hint={
+                          form.origemInicial === 'externo'
+                            ? 'Já era seu antes. Entra na carteira sem descontar do saldo do mês.'
+                            : `Sai do saldo de ${toMesId(new Date()) === state.mesId ? 'hoje' : 'do mês aberto'}, como qualquer despesa.`
+                        }
+                        wide>
+                        <Segmented
+                          ariaLabel="Origem do saldo inicial"
+                          value={form.origemInicial}
+                          onChange={value => setForm({...form, origemInicial: value})}
+                          options={[
+                            {value: 'externo', label: 'Já era meu'},
+                            {value: 'mes', label: 'Saiu do mês'},
+                          ]}
+                        />
+                      </Field>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -427,6 +552,7 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
           title={movimentando.descricao}
           subtitle={`Saldo bruto de ${money(posicaoAberta.bruto)}, sendo ${money(posicaoAberta.rendimento)} de rendimento. O movimento entra no mês aberto.`}
           saldoAtual={posicaoAberta.bruto}
+          perguntaOrigem
           onClose={() => setMovimentando(null)}
           onConfirm={registrarMovimento}
         />

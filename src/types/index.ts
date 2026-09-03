@@ -115,6 +115,12 @@ export type Pessoa = {
 
 export type TipoMovimento = 'aporte' | 'resgate';
 
+/**
+ * De onde saiu o dinheiro de um movimento de investimento.
+ * 'mes' desconta do saldo do mês, 'externo' só registra o que já era seu.
+ */
+export type OrigemAporte = 'mes' | 'externo';
+
 export type Meta = {
   id: string;
   user_id?: string | null;
@@ -203,6 +209,11 @@ export type InvestimentoMovimento = {
   data: string;
   valor: number;
   tipo: TipoMovimento;
+  /**
+   * Ausente significa 'mes', que era o comportamento antes da migração 003.
+   * Só o que saiu do mês desconta do saldo.
+   */
+  origem_recurso?: OrigemAporte | null;
   informacao?: string | null;
   add_date?: string | null;
   last_update?: string | null;

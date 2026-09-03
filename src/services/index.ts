@@ -9,6 +9,7 @@ import type {
   Mes,
   Meta,
   MetaMovimento,
+  OrigemAporte,
   Pessoa,
   Reserva,
   ReservaMovimento,
@@ -508,6 +509,10 @@ const stampNew = (userId: string) => ({
 
 const stampUpdate = () => ({last_update: now(), last_sync: now()});
 
+/** Verdadeiro quando o banco reclamou de uma coluna que a migração ainda não criou. */
+const colunaAusente = (error: unknown, coluna: string) =>
+  String((error as {message?: string})?.message || '').includes(coluna);
+
 /** Exclusão lógica, igual ao resto do aplicativo. Nada some do banco. */
 const softDelete = async (table: string, id: string) => {
   const {error} = await supabase
@@ -772,7 +777,12 @@ export const investimentoService = {
         .order('data', {ascending: true})
         .range(from, to),
     );
-    return rows.map(row => ({...row, valor: Number(row.valor) || 0}));
+    /* Sem a migração 003 a coluna não existe, e origem ausente vale como 'mes'. */
+    return rows.map(row => ({
+      ...row,
+      valor: Number(row.valor) || 0,
+      origem_recurso: (row.origem_recurso as OrigemAporte) || 'mes',
+    }));
   },
 
   /** Cria e edita pela mesma porta, preservando a data de abertura da aplicação. */
@@ -819,9 +829,11 @@ export const investimentoService = {
     tipo: TipoMovimento;
     data?: string;
     informacao?: string;
+    /** 'mes' desconta do saldo do mês, 'externo' só registra o que já era seu. */
+    origem?: OrigemAporte;
   }): Promise<InvestimentoMovimento> {
     const user = await requireUser();
-    const row: InvestimentoMovimento = {
+    const {origem_recurso, ...semOrigem} = {
       id: uuid(),
       investimento_id: input.investimentoId,
       mes_id: input.mesId,
@@ -829,11 +841,42 @@ export const investimentoService = {
       valor: Math.abs(input.valor),
       tipo: input.tipo,
       informacao: input.informacao || '',
+      origem_recurso: input.origem || 'mes',
       ...stampNew(user.id),
     };
+    const row: InvestimentoMovimento = {...semOrigem, origem_recurso};
+
     const {error} = await supabase.from('investimento_movimento').insert(row);
-    if (error) throw error;
+    if (error) {
+      /*
+       * A coluna chegou na migração 003. Enquanto ela não roda, o movimento
+       * entra do jeito antigo, descontando do mês, em vez de a tela quebrar.
+       */
+      if (!colunaAusente(error, 'origem_recurso')) throw error;
+      const {error: semColuna} = await supabase.from('investimento_movimento').insert(semOrigem);
+      if (semColuna) throw semColuna;
+      return {...row, origem_recurso: 'mes'};
+    }
     return row;
+  },
+
+  /**
+   * Corrige de onde veio o dinheiro de um movimento já lançado. É por aqui que
+   * uma aplicação cadastrada depois do fato para de descontar do mês errado.
+   */
+  async setMovimentoOrigem(id: string, origem: OrigemAporte) {
+    const {error} = await supabase
+      .from('investimento_movimento')
+      .update({origem_recurso: origem, ...stampUpdate()})
+      .eq('id', id);
+    if (error) {
+      if (colunaAusente(error, 'origem_recurso')) {
+        throw new Error(
+          'Rode a migração 20260903100000 no Supabase para poder dizer de onde veio o dinheiro.',
+        );
+      }
+      throw error;
+    }
   },
 
   async removeMovimento(id: string) {

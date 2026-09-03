@@ -327,3 +327,37 @@ textarea.input { height: auto; padding: var(--sp-3); resize: vertical; }
   .card-head-actions > div { width: 100%; }
   .segmented-slot { min-width: 0; width: 100%; }
 }
+
+/* ---------- Busca em lista ----------
+   Ícone dentro do campo, e o X só aparece quando há o que limpar. Sem animação:
+   digitar busca é a interação mais repetida da tela de despesas. */
+.search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 200px;
+  flex: 1 1 240px;
+  max-width: 340px;
+}
+.search-field > svg {
+  position: absolute;
+  left: 11px;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+.search-field .input { padding-left: 34px; padding-right: 38px; }
+/* O X nativo do type=search briga com o nosso botão. */
+.search-field .input::-webkit-search-cancel-button { display: none; }
+.search-field .search-clear {
+  position: absolute;
+  right: 3px;
+  width: 30px;
+  height: 30px;
+}
+@media (max-width: 700px) {
+  .search-field { max-width: none; flex-basis: 100%; }
+}
+
+/* Seta de abrir e fechar. Só transform, e o tempo do popover. */
+.chevron { transition: transform var(--dur-fast) var(--ease-out); }
+.chevron.is-open { transform: rotate(180deg); }

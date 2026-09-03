@@ -30,6 +30,12 @@ A migração `20260901090000_sobcontrole_investimentos_limites.sql` cria
 vazia e o teto fica em zero: o aplicativo não quebra, só não oferece as duas
 funções.
 
+A migração `20260903100000_sobcontrole_origem_do_aporte.sql` adiciona
+`investimento_movimento.origem_recurso`, que diz se o dinheiro saiu do
+recebimento do mês. Enquanto ela não roda, o movimento entra como saída do mês,
+que era o comportamento antigo, e a correção de origem avisa que falta rodar a
+migração.
+
 ---
 
 ## 1. Regras de negocio (não mudam sem pedido explicito)
@@ -78,6 +84,14 @@ aplicam ao lançamento:
 `fixed-all` se houver `despesa_fixa_id`. Toda exclusão e **logica**
 (`logical_delete_date`), nunca fisica. O mesmo vale para categorias.
 
+### Busca de despesa
+`searchExpenses` filtra por nome, categoria, pessoa, observação, valor e número da
+parcela, sem acento e por palavras soltas: cada termo digitado precisa aparecer em
+algum lugar da despesa. Ela é **lente da tela de despesas, não filtro do mês**, e
+por isso vive no estado da própria página: se entrasse em `state.expenses`, o
+saldo do mês mudaria a cada letra digitada. O filtro de categoria, esse sim, é do
+mês inteiro.
+
 ### Ganhos
 `ganhos_mes` (do mês) e `ganhos_mensais` (do perfil) são listas de `ValorResumo`
 serializadas como JSON em texto. Sempre passe por `normalizeGanhos` na leitura e
@@ -103,7 +117,9 @@ a receber        = despesas de terceiros - devoluções recebidas
 
 `aportes do mês` soma metas, reserva **e investimentos**, porque nos três casos o
 dinheiro saiu da conta corrente mesmo continuando seu. Quem faz essa soma é
-`aporteLiquidoMes`, e o mesmo conjunto alimenta `aportesPorDia` no gráfico.
+`aporteLiquidoMes`, e o mesmo conjunto alimenta `aportesPorDia` no gráfico. Do
+investimento entra só o movimento marcado como saído do mês: ver
+`origem_recurso` abaixo.
 
 O extrato por pessoa soma **todos os meses**, não só o aberto: uma compra
 parcelada em dez vezes atravessa o ano, e o saldo devedor só faz sentido inteiro.
@@ -148,6 +164,18 @@ composto em doze meses). O resultado fica em `localStorage` por doze horas. Sem
 rede, cai no último valor guardado e, em último caso, no patamar do código, e
 `aoVivo: false` obriga a interface a dizer que o número é estimativa. Estimativa
 e extrato não podem parecer a mesma coisa na tela.
+
+**Nem todo aporte sai do mês.** `investimento_movimento.origem_recurso` diz de
+onde veio o dinheiro: `mes` desconta do saldo, `externo` só registra o que já era
+seu. Cadastrar hoje uma aplicação que existe há dois anos não pode consumir o
+salário deste mês, e era exatamente isso que acontecia antes da migração 003.
+Quem decide é `saiuDoMes`, em `lib/selectors.ts`, e origem ausente vale como
+`mes`, que preserva o histórico já lançado. O saldo bruto e o rendimento ignoram
+a origem: o dinheiro está aplicado do mesmo jeito, venha de onde vier.
+
+O extrato de cada aplicação, em `features/investments/MovementList.tsx`, deixa
+corrigir a origem de um movimento já gravado. É por ali que uma carteira
+cadastrada depois do fato para de descontar do mês errado.
 
 Uma aplicação com `meta_id` preenchido vira lastro daquela meta: o progresso
 passa a somar o guardado na meta mais o saldo bruto investido. O dinheiro

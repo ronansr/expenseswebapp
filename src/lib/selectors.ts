@@ -404,9 +404,26 @@ export const movimentosDoMes = <T extends Movimento>(movimentos: T[], mesId: str
   movimentos.filter(item => item.mes_id === mesId);
 
 /**
+ * Um movimento de investimento só mexe no saldo do mês quando o dinheiro saiu
+ * do recebimento do mês. Cadastrar uma aplicação que já existia não é gastar o
+ * salário: o dinheiro entrou na carteira vindo de fora.
+ *
+ * Origem ausente vale como 'mes', que era o comportamento antes da migração 003.
+ */
+export const saiuDoMes = (movimento: InvestimentoMovimento) =>
+  (movimento.origem_recurso || 'mes') === 'mes';
+
+/** Movimentos do mês que de fato passaram pela conta corrente. */
+const investimentosDoCaixa = (movimentos: InvestimentoMovimento[], mesId: string) =>
+  movimentosDoMes(movimentos, mesId).filter(saiuDoMes);
+
+/**
  * Quanto saiu do bolso neste mês para metas, reserva e investimentos, já
  * descontados os resgates. Guardar e investir tiram do saldo do mês pela mesma
  * razão: o dinheiro saiu da conta corrente, mesmo continuando seu.
+ *
+ * O investimento marcado como dinheiro de fora fica fora desta conta: ele entrou
+ * na carteira sem passar pelo recebimento deste mês.
  */
 export const aporteLiquidoMes = (
   metaMovimentos: MetaMovimento[],
@@ -416,7 +433,7 @@ export const aporteLiquidoMes = (
 ) =>
   saldoDeMovimentos(movimentosDoMes(metaMovimentos, mesId)) +
   saldoDeMovimentos(movimentosDoMes(reservaMovimentos, mesId)) +
-  saldoDeMovimentos(movimentosDoMes(investimentoMovimentos, mesId));
+  saldoDeMovimentos(investimentosDoCaixa(investimentoMovimentos, mesId));
 
 /** Aportes do mês posicionados no dia em que aconteceram, para entrar no gráfico. */
 export const aportesPorDia = (
@@ -428,7 +445,7 @@ export const aportesPorDia = (
   [
     ...movimentosDoMes(metaMovimentos, mesId),
     ...movimentosDoMes(reservaMovimentos, mesId),
-    ...movimentosDoMes(investimentoMovimentos, mesId),
+    ...investimentosDoCaixa(investimentoMovimentos, mesId),
   ].map(item => ({
     day: dayNumber(item.data),
     valor: item.tipo === 'resgate' ? -item.valor : item.valor,
@@ -634,4 +651,66 @@ export const metaComInvestimento = (
     progresso: alvo > 0 ? Math.min(total / alvo, 1) : 0,
     falta: Math.max(alvo - total, 0),
   };
+};
+
+// =============================================================================
+// Busca de despesa
+// =============================================================================
+
+/**
+ * Acento não pode ser obstáculo: quem digita "agua" às pressas espera achar
+ * "Água". Também dobramos o cê-cedilha, que some no NFD mas não na cabeça de
+ * ninguém.
+ */
+export const normalizeText = (value: string) =>
+  (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+/**
+ * Tudo o que a pessoa vê na linha da despesa vira texto pesquisável: descrição,
+ * categoria, pessoa, valor e a marca da parcela. Procurar por "3/10" ou por
+ * "150" tem que funcionar, porque é assim que a despesa aparece na tela.
+ */
+const expenseHaystack = (
+  expense: Despesa,
+  categorias: Map<string, string>,
+  pessoas: Map<string, string>,
+) =>
+  normalizeText(
+    [
+      expense.descricao,
+      categorias.get(expense.categoriaId) || '',
+      expense.pessoa_id ? pessoas.get(expense.pessoa_id) || 'terceiro' : '',
+      expense.informacao || '',
+      expense.totalParcelas > 1 ? `${expense.parcela}/${expense.totalParcelas} parcela parcelada` : '',
+      expense.despesa_fixa_id ? 'fixa' : '',
+      String(expense.valor ?? 0),
+      String(expense.valor ?? 0).replace('.', ','),
+    ].join(' '),
+  );
+
+/**
+ * Filtro por texto livre. Cada palavra digitada precisa aparecer em algum lugar
+ * da despesa, o que deixa refinar somando termos: "luz mar" acha a conta de luz
+ * paga pela Mariana sem exigir a ordem certa.
+ */
+export const searchExpenses = (
+  expenses: Despesa[],
+  term: string,
+  options: {categorias?: CategoriaDespesa[]; pessoas?: Pessoa[]} = {},
+): Despesa[] => {
+  const alvo = normalizeText(term);
+  if (!alvo) return expenses;
+
+  const categorias = new Map((options.categorias || []).map(item => [item.id, item.descricao]));
+  const pessoas = new Map((options.pessoas || []).map(item => [item.id, item.nome]));
+  const termos = alvo.split(/\s+/).filter(Boolean);
+
+  return expenses.filter(expense => {
+    const texto = expenseHaystack(expense, categorias, pessoas);
+    return termos.every(termo => texto.includes(termo));
+  });
 };

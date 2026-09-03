@@ -1,11 +1,12 @@
 import {useMemo, useState} from 'react';
-import {CheckSquare, Receipt, X} from 'lucide-react';
+import {CheckSquare, Receipt, SearchX, X} from 'lucide-react';
 import {Card, CardHeader} from '../../components/ui/Card';
 import {EmptyState} from '../../components/ui/EmptyState';
 import {ExpenseRow} from './ExpenseRow';
 import {CategoryFilter} from './CategoryFilter';
+import {ExpenseSearch} from './ExpenseSearch';
 import {SelectionBar} from './SelectionBar';
-import {categoryTotals, groupByDueDate, STATUS_PAID} from '../../lib/selectors';
+import {categoryTotals, groupByDueDate, searchExpenses, STATUS_PAID} from '../../lib/selectors';
 import {dayLabel, money} from '../../lib/format';
 import type {Despesa} from '../../types';
 import type {PageProps} from '../../app/pageProps';
@@ -20,9 +21,25 @@ export const ExpensesPage = ({
 }: PageProps) => {
   const [selecionando, setSelecionando] = useState(false);
   const [selecionadas, setSelecionadas] = useState<string[]>([]);
+  const [busca, setBusca] = useState('');
 
-  const groups = groupByDueDate(state.expenses);
+  /*
+   * A busca é uma lente desta tela, não um filtro do mês: ela não entra em
+   * `state.expenses` justamente para não mexer no saldo enquanto se digita.
+   */
+  const visiveis = useMemo(
+    () =>
+      searchExpenses(state.expenses, busca, {
+        categorias: dashboard.categoria_despesas,
+        pessoas: ledger.pessoas,
+      }),
+    [state.expenses, busca, dashboard.categoria_despesas, ledger.pessoas],
+  );
+
+  const groups = groupByDueDate(visiveis);
   const totals = categoryTotals(dashboard);
+  const totalVisivel = visiveis.reduce((acc, item) => acc + item.valor, 0);
+  const buscando = busca.trim().length > 0;
 
   /**
    * Somar despesa na mão é o atrito que a seleção resolve, então o resumo já
@@ -56,11 +73,14 @@ export const ExpensesPage = ({
     setSelecionadas([]);
   };
 
-  const selecionarTudo = () => setSelecionadas(state.expenses.map(item => item.id));
+  /* Selecionar tudo respeita a busca: o que está fora da tela não entra na conta. */
+  const selecionarTudo = () => setSelecionadas(visiveis.map(item => item.id));
 
   return (
     <div className="enter page-stack">
       <div className="toolbar">
+        <ExpenseSearch value={busca} onChange={setBusca} encontradas={visiveis.length} />
+
         <CategoryFilter
           categorias={dashboard.categoria_despesas}
           totals={totals}
@@ -79,18 +99,33 @@ export const ExpensesPage = ({
         </button>
 
         <span className="toolbar-note">
-          {state.expenses.length} despesa(s), {money(state.totals.total)} no total
+          {buscando
+            ? `${visiveis.length} de ${state.expenses.length} despesa(s), ${money(totalVisivel)}`
+            : `${state.expenses.length} despesa(s), ${money(state.totals.total)} no total`}
         </span>
       </div>
 
       {groups.length === 0 ? (
         <Card>
-          <EmptyState
-            icon={<Receipt size={22} />}
-            title="Nenhuma despesa neste mês"
-            description="Cadastre um lançamento ou limpe o filtro de categorias para ver o que já existe."
-            action={<button type="button" className="btn btn-primary" onClick={onNewExpense}>Nova despesa</button>}
-          />
+          {buscando ? (
+            <EmptyState
+              icon={<SearchX size={22} />}
+              title={`Nada encontrado para "${busca.trim()}"`}
+              description="A busca olha nome, categoria, pessoa, valor e número da parcela deste mês. Talvez a despesa esteja em outro mês."
+              action={
+                <button type="button" className="btn btn-ghost" onClick={() => setBusca('')}>
+                  Limpar busca
+                </button>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={<Receipt size={22} />}
+              title="Nenhuma despesa neste mês"
+              description="Cadastre um lançamento ou limpe o filtro de categorias para ver o que já existe."
+              action={<button type="button" className="btn btn-primary" onClick={onNewExpense}>Nova despesa</button>}
+            />
+          )}
         </Card>
       ) : (
         groups.map(([day, items]) => {
