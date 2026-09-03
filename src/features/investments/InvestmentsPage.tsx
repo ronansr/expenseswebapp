@@ -1,8 +1,10 @@
 import {useMemo, useState} from 'react';
 import {
+  CalendarClock,
   ChevronDown,
   Coins,
   LineChart,
+  Landmark,
   Pencil,
   Plus,
   Target,
@@ -17,17 +19,20 @@ import {Field, SelectWrap} from '../../components/ui/Field';
 import {MoneyInput} from '../../components/ui/MoneyInput';
 import {MovementModal} from '../../components/ui/MovementModal';
 import {Segmented} from '../../components/ui/Segmented';
+import {Switch} from '../../components/ui/Switch';
 import {KpiCard} from '../overview/KpiCard';
 import {MovementList} from './MovementList';
 import {RatesCard} from './RatesCard';
 import {investimentoService} from '../../services';
 import {
   TIPO_LABEL,
+  mesNoFuturo,
   posicoesInvestimento,
+  referenciaDoMes,
   resumoCarteira,
   taxaMediaCarteira,
 } from '../../lib/investments';
-import {money, parseMoney, shortDate, toMesId} from '../../lib/format';
+import {money, monthLabel, parseMoney, shortDate, toMesId} from '../../lib/format';
 import {saiuDoMes} from '../../lib/selectors';
 import {errorMessage} from '../../lib/errors';
 import type {
@@ -45,6 +50,7 @@ const FORM_VAZIO = {
   indicePercentual: '100',
   taxaFixa: '10',
   metaId: '',
+  isentoIr: false,
   aporteInicial: '',
   /*
    * Quem cadastra uma aplicação quase sempre está registrando dinheiro que já
@@ -73,9 +79,18 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
+  /*
+   * A carteira é olhada até o fim do mês aberto, e no mês corrente até hoje.
+   * Trocar de mês passa a mover o montante, que é o que a pessoa espera de um
+   * painel mensal: janeiro mostra janeiro, não a foto de hoje repetida.
+   */
+  const referencia = useMemo(() => referenciaDoMes(state.mesId), [state.mesId]);
+  const futuro = mesNoFuturo(state.mesId);
+  const mesCorrente = state.mesId === toMesId(new Date());
+
   const posicoes = useMemo(
-    () => posicoesInvestimento(ledger.investimentos, ledger.investimentoMovimentos, ledger.rates),
-    [ledger.investimentos, ledger.investimentoMovimentos, ledger.rates],
+    () => posicoesInvestimento(ledger.investimentos, ledger.investimentoMovimentos, ledger.rates, referencia),
+    [ledger.investimentos, ledger.investimentoMovimentos, ledger.rates, referencia],
   );
   const carteira = useMemo(() => resumoCarteira(posicoes), [posicoes]);
   const taxaMedia = useMemo(() => taxaMediaCarteira(posicoes), [posicoes]);
@@ -120,6 +135,7 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
       indicePercentual: String(investimento.indice_percentual ?? 100),
       taxaFixa: String(investimento.taxa_fixa ?? 0),
       metaId: investimento.meta_id || '',
+      isentoIr: Boolean(investimento.isento_ir),
       aporteInicial: '',
       origemInicial: FORM_VAZIO.origemInicial,
     });
@@ -137,6 +153,7 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
         indicePercentual: usaIndice(form.tipo) ? Number(form.indicePercentual) || 0 : 100,
         taxaFixa: usaTaxaFixa(form.tipo) ? Number(form.taxaFixa) || 0 : 0,
         metaId: form.metaId || null,
+        isentoIr: form.tipo === 'poupanca' ? false : form.isentoIr,
         editando,
       });
 
@@ -233,9 +250,18 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
       {error && <p className="banner" role="alert">{error}</p>}
       {ledger.error && <p className="banner" role="alert">{ledger.error}</p>}
 
+      {!mesCorrente && (
+        <p className={`banner ${futuro ? 'banner-warn' : 'banner-info'}`}>
+          <CalendarClock size={16} aria-hidden="true" />
+          {futuro
+            ? `Projeção para ${shortDate(referencia)}, na taxa de hoje. Não é extrato: nenhum aporte futuro está previsto aqui, só o que já foi lançado rendendo até lá.`
+            : `Carteira como estava em ${shortDate(referencia)}, no fim de ${monthLabel(state.mesId).toLowerCase()}. O que foi movimentado depois não entra nesta conta.`}
+        </p>
+      )}
+
       <div className="grid grid-kpi">
         <KpiCard
-          label="Saldo bruto"
+          label={mesCorrente ? 'Saldo bruto' : 'Saldo bruto no mês'}
           value={carteira.bruto}
           footnote={
             carteira.aplicado > 0
@@ -244,6 +270,19 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
           }
           icon={Wallet}
           tone="good"
+        />
+        <KpiCard
+          label="Líquido de imposto"
+          value={carteira.liquido}
+          footnote={
+            carteira.ir > 0
+              ? `${money(carteira.ir)} de IR se resgatar tudo, ${carteira.rentabilidadeLiquida.toFixed(2).replace('.', ',')}% líquido`
+              : carteira.rendimento > 0
+                ? 'Carteira inteira isenta de imposto'
+                : 'Sem rendimento para tributar ainda'
+          }
+          icon={Landmark}
+          tone={carteira.ir > 0 ? 'warn' : undefined}
         />
         <KpiCard
           label="Total aplicado"
@@ -276,7 +315,7 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
         <Card>
           <CardHeader
             title="Sua carteira"
-            subtitle="O rendimento é recalculado a cada leitura, pelo tempo que cada aporte passou aplicado. Abra o extrato para dizer o que saiu do mês e o que já era seu."
+            subtitle={`Rendimento e imposto são recalculados a cada leitura, pelo tempo que cada aporte passou aplicado até ${shortDate(referencia)}. Abra o extrato para dizer o que saiu do mês e o que já era seu.`}
           />
           <div className="card-list">
             {posicoes.length === 0 ? (
@@ -315,6 +354,11 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
                           <span className="pill pill-info">
                             {posicao.taxaAoAno.toFixed(2).replace('.', ',')}% ao ano
                           </span>
+                          <span className={`pill ${posicao.isenta ? 'pill-good' : 'pill-warn'}`}>
+                            {posicao.isenta
+                              ? 'Isento de IR'
+                              : `IR de ${posicao.aliquotaEfetiva.toFixed(1).replace('.', ',')}%`}
+                          </span>
                           {meta && (
                             <span className="pill pill-good">
                               <Target size={11} aria-hidden="true" /> {meta}
@@ -340,6 +384,14 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
                           <span>
                             Rende por mês <b className="money">{money(posicao.rendimentoMensalEstimado)}</b>
                           </span>
+                          {!posicao.isenta && posicao.ir > 0 && (
+                            <span>
+                              Imposto <b className="money text-warn">{money(posicao.ir)}</b>
+                            </span>
+                          )}
+                          <span>
+                            Líquido <b className="money">{money(posicao.liquido)}</b>
+                          </span>
                           {posicao.primeiroAporte && (
                             <span className="text-muted">Desde {shortDate(posicao.primeiroAporte)}</span>
                           )}
@@ -348,6 +400,7 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
                         {aberto && (
                           <MovementList
                             movimentos={posicao.movimentos}
+                            referencia={referencia}
                             busy={busy}
                             onChangeOrigem={trocarOrigem}
                             onRemove={removerMovimento}
@@ -476,6 +529,23 @@ export const InvestmentsPage = ({state, ledger}: PageProps) => {
                       />
                       <span aria-hidden="true">% a.a.</span>
                     </div>
+                  </Field>
+                )}
+
+                {form.tipo !== 'poupanca' && (
+                  <Field
+                    label="Imposto de renda"
+                    hint={
+                      form.isentoIr
+                        ? 'LCI, LCA, CRI, CRA e debênture incentivada não pagam imposto sobre o rendimento.'
+                        : 'CDB, Tesouro e fundo pagam pela tabela regressiva: 22,5% até seis meses, caindo até 15% depois de dois anos.'
+                    }
+                    wide>
+                    <Switch
+                      label="Esta aplicação é isenta"
+                      checked={form.isentoIr}
+                      onChange={value => setForm({...form, isentoIr: value})}
+                    />
                   </Field>
                 )}
 

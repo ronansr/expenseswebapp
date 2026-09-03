@@ -759,10 +759,12 @@ export const investimentoService = {
         .order('add_date', {ascending: true})
         .range(from, to),
     );
+    /* Sem a migração 004 a coluna não existe, e nada é isento além da poupança. */
     return rows.map(row => ({
       ...row,
       indice_percentual: Number(row.indice_percentual) || 0,
       taxa_fixa: Number(row.taxa_fixa) || 0,
+      isento_ir: Boolean(row.isento_ir),
     }));
   },
 
@@ -793,28 +795,44 @@ export const investimentoService = {
     indicePercentual: number;
     taxaFixa: number;
     metaId?: string | null;
+    isentoIr?: boolean;
     liquidezDiaria?: boolean;
     informacao?: string;
     editando?: Investimento | null;
   }): Promise<Investimento> {
     const user = await requireUser();
-    const row: Investimento = {
+    const {isento_ir, ...semIsencao} = {
       id: input.id || uuid(),
       descricao: input.descricao.trim(),
       tipo: input.tipo,
       indice_percentual: input.indicePercentual,
       taxa_fixa: input.taxaFixa,
       meta_id: input.metaId || null,
+      isento_ir: input.isentoIr ?? false,
       liquidez_diaria: input.liquidezDiaria ?? true,
       informacao: input.informacao || '',
       extra_data: '',
       ...stampNew(user.id),
       add_date: input.editando?.add_date || now(),
     };
+    const row: Investimento = {...semIsencao, isento_ir};
+
     const {error} = await supabase
       .from('investimento')
       .upsert(row, {onConflict: 'id', defaultToNull: false});
-    if (error) throw error;
+    if (error) {
+      /*
+       * A isenção chegou na migração 004. Enquanto ela não roda, a aplicação é
+       * salva sem a marca em vez de a tela quebrar, e o cálculo trata como
+       * tributada, que é o caso mais comum.
+       */
+      if (!colunaAusente(error, 'isento_ir')) throw error;
+      const {error: semColuna} = await supabase
+        .from('investimento')
+        .upsert(semIsencao, {onConflict: 'id', defaultToNull: false});
+      if (semColuna) throw semColuna;
+      return {...row, isento_ir: false};
+    }
     return row;
   },
 

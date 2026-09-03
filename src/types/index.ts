@@ -192,6 +192,11 @@ export type Investimento = {
   indice_percentual: number;
   /** Taxa em % ao ano. Inteira no prefixado, só o spread no ipca. */
   taxa_fixa: number;
+  /**
+   * LCI, LCA, CRI, CRA e debênture incentivada não pagam imposto de renda.
+   * A poupança é isenta por lei e não depende deste campo.
+   */
+  isento_ir?: boolean | null;
   liquidez_diaria?: boolean | null;
   informacao?: string | null;
   extra_data?: string | null;

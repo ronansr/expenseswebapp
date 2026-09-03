@@ -8,7 +8,12 @@ import {MovementModal} from '../../components/ui/MovementModal';
 import {KpiCard} from '../overview/KpiCard';
 import {metaService} from '../../services';
 import {metaComInvestimento, metaProgress} from '../../lib/selectors';
-import {mesesParaAlvo, posicoesInvestimento, taxaMediaCarteira} from '../../lib/investments';
+import {
+  mesesParaAlvo,
+  posicoesInvestimento,
+  referenciaDoMes,
+  taxaMediaCarteira,
+} from '../../lib/investments';
 import {money, monthLabel, parseMoney, shortDate, toInputDate, toMesId} from '../../lib/format';
 import {errorMessage} from '../../lib/errors';
 import type {Meta, TipoMovimento} from '../../types';
@@ -38,18 +43,29 @@ export const GoalsPage = ({state, ledger, onNavigate}: PageProps) => {
     [ledger.metas, ledger.metaMovimentos, state.mesId],
   );
 
+  /* A carteira acompanha o mês aberto, igual na tela de investimentos. */
   const posicoes = useMemo(
-    () => posicoesInvestimento(ledger.investimentos, ledger.investimentoMovimentos, ledger.rates),
-    [ledger.investimentos, ledger.investimentoMovimentos, ledger.rates],
+    () =>
+      posicoesInvestimento(
+        ledger.investimentos,
+        ledger.investimentoMovimentos,
+        ledger.rates,
+        referenciaDoMes(state.mesId),
+      ),
+    [ledger.investimentos, ledger.investimentoMovimentos, ledger.rates, state.mesId],
   );
 
-  /** Quanto cada meta tem de lastro em aplicações apontadas para ela. */
+  /**
+   * Quanto cada meta tem de lastro em aplicações apontadas para ela. Conta o
+   * líquido, não o bruto: o imposto não é seu, e uma meta alcançada só no papel
+   * decepciona na hora do resgate.
+   */
   const investidoPorMeta = useMemo(() => {
     const mapa = new Map<string, number>();
     posicoes.forEach(posicao => {
       const metaId = posicao.investimento.meta_id;
       if (!metaId) return;
-      mapa.set(metaId, (mapa.get(metaId) || 0) + posicao.bruto);
+      mapa.set(metaId, (mapa.get(metaId) || 0) + posicao.liquido);
     });
     return mapa;
   }, [posicoes]);

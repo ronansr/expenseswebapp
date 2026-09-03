@@ -306,6 +306,8 @@ textarea.input { height: auto; padding: var(--sp-3); resize: vertical; }
   color: var(--bad-600);
   font-size: 13px;
 }
+/* Icone do aviso nao encolhe nem sobe: ele acompanha a primeira linha do texto. */
+.banner > svg { flex-shrink: 0; margin-top: 1px; }
 .banner-info { border-color: var(--info-600); background: var(--info-050); color: var(--info-600); }
 .banner-good { border-color: var(--good-600); background: var(--good-050); color: var(--good-600); }
 .banner-warn { border-color: var(--warn-600); background: var(--warn-050); color: var(--warn-600); }

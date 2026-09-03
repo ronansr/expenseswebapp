@@ -83,7 +83,8 @@ export const fixedDueDateForMonth = (sourceDueDate: string, targetMesId: string)
 export const addMonthsIso = (sourceIso: string, amount: number) =>
   addMonths(parseDate(sourceIso), amount).toISOString();
 
-export const shortDate = (value: string) => format(parseDate(value), 'dd/MM/yyyy');
+export const shortDate = (value: string | Date) =>
+  format(typeof value === 'string' ? parseDate(value) : value, 'dd/MM/yyyy');
 export const shortDayMonth = (value: string) => format(parseDate(value), 'dd/MM');
 export const monthShort = (mesId: string) => format(parseDate(`${mesId}-01`), 'MMM/yy', {locale: ptBR});
 export const dayNumber = (value: string) => Number(toInputDate(value).slice(8, 10));

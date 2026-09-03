@@ -877,3 +877,8 @@
   .movement-row { grid-template-columns: 26px minmax(0, 1fr) auto; }
   .movement-row .pill-toggle { grid-column: 2; justify-self: start; }
 }
+
+/* Movimento que aconteceu depois do mês aberto: aparece para não sumir do
+   extrato, mas apagado, porque não entrou na posição mostrada. */
+.movement-row.is-later { opacity: .55; }
+.movement-row.is-later .money { text-decoration: line-through; text-decoration-thickness: 1px; }

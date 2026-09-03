@@ -36,6 +36,11 @@ recebimento do mês. Enquanto ela não roda, o movimento entra como saída do m�
 que era o comportamento antigo, e a correção de origem avisa que falta rodar a
 migração.
 
+A migração `20260903170000_sobcontrole_isencao_de_ir.sql` adiciona
+`investimento.isento_ir`. Enquanto ela não roda, a aplicação é salva sem a marca
+e o cálculo a trata como tributada, que é o caso mais comum. A alíquota em si
+nunca vai para o banco.
+
 ---
 
 ## 1. Regras de negocio (não mudam sem pedido explicito)
@@ -177,10 +182,36 @@ O extrato de cada aplicação, em `features/investments/MovementList.tsx`, deixa
 corrigir a origem de um movimento já gravado. É por ali que uma carteira
 cadastrada depois do fato para de descontar do mês errado.
 
+**A carteira acompanha o mês aberto.** `referenciaDoMes` devolve a data em que a
+posição é olhada: hoje, se o mês aberto é o corrente, e o fim do último dia em
+qualquer outro mês. Trocar de mês move o montante, porque é isso que um painel
+mensal promete. Movimento posterior à referência não entra na conta: olhar
+janeiro não pode enxergar dinheiro aplicado em março, e o extrato mostra esses
+movimentos apagados em vez de escondê-los. Mês futuro é projeção do que já foi
+lançado rendendo até lá, sem prever aporte nenhum, e a tela diz isso com todas as
+letras.
+
+**O imposto também é derivado, nunca gravado.** A tabela regressiva mora em
+`FAIXAS_IR`: 22,5% até 180 dias, 20% até 360, 17,5% até 720 e 15% depois disso.
+O imposto incide só sobre o rendimento e é calculado **lote a lote**, porque a
+alíquota depende da idade de cada aporte: cem reais parados há dois anos pagam
+15% enquanto cem reais do mês passado pagam 22,5%. A alíquota efetiva que aparece
+na tela é a média ponderada pelo rendimento de cada lote.
+
+A poupança é isenta por lei, e `investimento.isento_ir` marca as demais isentas,
+que são LCI, LCA, CRI, CRA e debênture incentivada. A isenção não dá para deduzir
+do campo `tipo`: uma LCI e um CDB podem render o mesmo percentual do CDI e ter
+tratamento tributário oposto.
+
+O IOF dos trinta primeiros dias fica de fora de propósito. Ele só existe em um
+resgate muito curto, quando o rendimento ainda é pequeno demais para mudar
+decisão nenhuma, e incluí-lo complicaria a leitura de todos os outros meses.
+
 Uma aplicação com `meta_id` preenchido vira lastro daquela meta: o progresso
-passa a somar o guardado na meta mais o saldo bruto investido. O dinheiro
-continua sendo um só, e o desconto do saldo do mês acontece uma vez, no
-movimento que realmente aconteceu.
+passa a somar o guardado na meta mais o **líquido** investido, já descontado o
+imposto. O bruto mentiria: uma meta alcançada no papel decepciona na hora do
+resgate. O dinheiro continua sendo um só, e o desconto do saldo do mês acontece
+uma vez, no movimento que realmente aconteceu.
 
 ### Teto de gasto por categoria
 `categoriadespesa.limite_mensal` guarda o teto. Zero desliga o aviso.
